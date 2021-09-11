@@ -3,6 +3,10 @@ name = "twowaiyo"
 version = "0.1.0"
 edition = "2018"
 
+[lib]
+name = "twowaiyo"
+path = "src/lib.rs"
+
 [[bin]]
 name = "twowaiyo"
 path = "src/bin/main.rs"
@@ -11,3 +15,4 @@ path = "src/bin/main.rs"
 dotenv = { version = "0.15.0" }
 env_logger = { version = "^0.9.0" }
 log = { version = "^0.4.1" }
+getrandom = { version = "^0.2" }
