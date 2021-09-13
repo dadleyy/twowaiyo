@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use super::{checks, Bet};
+use super::{bets::Bet, checks};
 
 #[derive(Debug)]
 pub enum Action {
