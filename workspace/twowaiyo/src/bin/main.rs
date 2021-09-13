@@ -20,7 +20,7 @@ fn main() -> Result<()> {
   log::debug!("initialized state {:?}", dealer);
 
   loop {
-    log::info!("current state - {:?}", dealer);
+    log::info!("{:?}", dealer);
 
     let mut buffer = String::with_capacity(32);
 

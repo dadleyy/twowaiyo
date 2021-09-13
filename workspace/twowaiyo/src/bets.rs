@@ -18,6 +18,22 @@ impl<T> BetResult<T> {
       BetResult::Noop(item) => BetResult::Noop(mapper(item)),
     }
   }
+
+  pub fn winnings(&self) -> u32 {
+    match self {
+      BetResult::Win(amount) => *amount,
+      BetResult::Loss => 0,
+      BetResult::Noop(_) => 0,
+    }
+  }
+
+  pub fn remaining(self) -> Option<T> {
+    match self {
+      BetResult::Win(_) => None,
+      BetResult::Loss => None,
+      BetResult::Noop(item) => Some(item),
+    }
+  }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -31,14 +47,14 @@ impl RaceBet {
     let total = roll.total();
 
     match (self.target, total) {
-      (Some(goal), value) if value == goal => BetResult::Win(10),
+      (Some(goal), value) if value == goal => BetResult::Win(self.amount + self.amount),
       (Some(_), 7) => BetResult::Loss,
       (Some(goal), _) => BetResult::Noop(RaceBet {
         amount: self.amount,
         target: Some(goal),
       }),
 
-      (None, 7) | (None, 11) => BetResult::Win(self.amount),
+      (None, 7) | (None, 11) => BetResult::Win(self.amount + self.amount),
       (None, 2) | (None, 3) | (None, 12) => BetResult::Loss,
       (None, value) => BetResult::Noop(RaceBet {
         amount: self.amount,
@@ -98,8 +114,8 @@ impl Bet {
         odds_result(total, target, amount).map(|(amount, target)| Bet::Place(amount, target))
       }
       Bet::Field(amount) => match amount {
-        2 | 12 => BetResult::Win(amount * 2),
-        3 | 4 | 9 | 10 | 11 => BetResult::Win(amount),
+        2 | 12 => BetResult::Win((amount * 2) + amount),
+        3 | 4 | 9 | 10 | 11 => BetResult::Win(amount + amount),
         _ => BetResult::Loss,
       },
     }
@@ -199,7 +215,7 @@ mod test {
       target: None,
     };
     let roll = vec![3u8, 4u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Win(10),);
+    assert_eq!(bet.result(&roll), BetResult::Win(20));
   }
 
   #[test]
@@ -257,7 +273,7 @@ mod test {
       target: None,
     };
     let roll = vec![5u8, 6u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Win(10),);
+    assert_eq!(bet.result(&roll), BetResult::Win(20));
   }
 
   #[test]
@@ -301,7 +317,7 @@ mod test {
       target: Some(4),
     };
     let roll = vec![2u8, 2u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Win(10));
+    assert_eq!(bet.result(&roll), BetResult::Win(20));
   }
 
   #[test]
@@ -311,7 +327,7 @@ mod test {
       target: Some(5),
     };
     let roll = vec![2u8, 3u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Win(10));
+    assert_eq!(bet.result(&roll), BetResult::Win(20));
   }
 
   #[test]

@@ -12,10 +12,16 @@ use roll::Roll;
 
 use errors::CarryError;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct Dealer {
   player: Player,
   table: Table,
+}
+
+impl std::fmt::Debug for Dealer {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    write!(formatter, "{:?}", self.table)
+  }
 }
 
 impl Dealer {
@@ -66,7 +72,7 @@ impl Seat {
   }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct Table {
   button: Option<u8>,
   seats: HashMap<uuid::Uuid, Seat>,
@@ -98,6 +104,25 @@ fn apply_bet(mut table: Table, player: &Player, bet: &Bet) -> Result<Table, Carr
   table.seats.insert(player.id, updated);
 
   Ok(table)
+}
+
+impl std::fmt::Debug for Table {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    writeln!(formatter, "table")?;
+    writeln!(formatter, "button:    {:?}", self.button)?;
+    writeln!(formatter, "last roll: {:?}", self.rolls.get(0))?;
+
+    writeln!(formatter, "-- seats:")?;
+    for (_, seat) in self.seats.iter() {
+      writeln!(formatter, "  balance: {}", seat.balance)?;
+      writeln!(formatter, "  -- bets:")?;
+      for bet in seat.bets.iter() {
+        writeln!(formatter, "  {:?}", bet)?;
+      }
+    }
+
+    Ok(())
+  }
 }
 
 impl Table {
@@ -137,18 +162,39 @@ impl Table {
 
     log::debug!("generated roll - {:?}, result: {:?}", roll, result);
 
-    let seats = self.seats;
-    /*
-    .into_iter()
-    .map(|(k, v)| {
-      let Seat { bets, balance } = v;
-      let bets = bets.into_iter().map(|bet| bet.apply(&roll)).flatten().collect();
-      (k, Seat { bets, balance })
-    })
-    .collect();
-    */
+    let seats = self
+      .seats
+      .into_iter()
+      .map(|(k, v)| {
+        let Seat { bets, balance } = v;
+        let start: (Vec<Bet>, u32) = (vec![], 0);
 
-    let rolls = self.rolls.into_iter().chain(Some(roll)).collect::<Vec<Roll>>();
+        let (bets, winnings) = bets.into_iter().fold(start, |(remaining, winnings), item| {
+          let result = item.result(&roll);
+          let winnings = winnings + result.winnings();
+          let remaining = remaining.into_iter().chain(result.remaining()).collect();
+          (remaining, winnings)
+        });
+
+        if winnings > 0 {
+          log::info!(
+            "payout - {} (original balance: {}, new: {})",
+            winnings,
+            balance,
+            balance + winnings
+          )
+        }
+
+        let balance = balance + winnings;
+        (k, Seat { bets, balance })
+      })
+      .collect();
+
+    let rolls = Some(roll)
+      .into_iter()
+      .chain(self.rolls.into_iter())
+      .take(2)
+      .collect::<Vec<Roll>>();
 
     Table { seats, rolls, button }
   }
