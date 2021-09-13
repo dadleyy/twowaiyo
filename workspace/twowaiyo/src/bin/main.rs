@@ -41,11 +41,11 @@ fn main() -> Result<()> {
       }
 
       Some(twowaiyo::io::Action::Roll) => {
-        log::debug!("received roll, throwing!");
+        log::info!("throwing die...");
         dealer = dealer.roll();
       }
       Some(twowaiyo::io::Action::Bet(bet)) => {
-        log::debug!("attempting bet - {:?}", bet);
+        log::info!("attempting bet - {:?}", bet);
 
         dealer = dealer
           .bet(&bet)

@@ -176,15 +176,6 @@ impl Table {
           (remaining, winnings)
         });
 
-        if winnings > 0 {
-          log::info!(
-            "payout - {} (original balance: {}, new: {})",
-            winnings,
-            balance,
-            balance + winnings
-          )
-        }
-
         let balance = balance + winnings;
         (k, Seat { bets, balance })
       })
