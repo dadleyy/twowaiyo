@@ -13,13 +13,15 @@ fn main() -> Result<()> {
   env_logger::init();
   log::info!("logger initialized, preparing table");
 
-  let mut table = twowaiyo::Table::default();
+  let table = twowaiyo::Table::default();
   let player = twowaiyo::Player::default();
+  let mut dealer = twowaiyo::Dealer::new(table, player);
 
-  log::debug!("initialized player {:?} and table {:?}", player, table);
+  log::debug!("initialized state {:?}", dealer);
 
   loop {
-    log::info!("current table state - {:?}", table);
+    log::info!("current state - {:?}", dealer);
+
     let mut buffer = String::with_capacity(32);
 
     match stdin().read_line(&mut buffer) {
@@ -37,10 +39,23 @@ fn main() -> Result<()> {
         log::info!("received exit, leaving main game loop");
         break;
       }
+
       Some(twowaiyo::io::Action::Roll) => {
-        log::info!("received roll, throwing!");
-        table = table.roll();
+        log::debug!("received roll, throwing!");
+        dealer = dealer.roll();
       }
+      Some(twowaiyo::io::Action::Bet(bet)) => {
+        log::debug!("attempting bet - {:?}", bet);
+
+        dealer = dealer
+          .bet(&bet)
+          .map_err(|carry| {
+            log::warn!("invalid bet - {:?}", carry);
+            carry.consume()
+          })
+          .unwrap_or_else(|d| d);
+      }
+
       None => log::warn!("unable to parse input, skipping"),
     }
   }
