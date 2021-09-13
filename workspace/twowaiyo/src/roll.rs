@@ -1,11 +1,6 @@
 use std::iter::FromIterator;
 
-fn is_place(amount: u8) -> bool {
-  match amount {
-    4 | 5 | 6 | 8 | 9 | 10 => true,
-    _ => false,
-  }
-}
+use super::checks::is_place;
 
 #[derive(Clone, PartialEq)]
 pub struct Roll(u8, u8);

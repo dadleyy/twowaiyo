@@ -43,7 +43,7 @@ pub struct RaceBet {
 }
 
 impl RaceBet {
-  pub fn result(self, roll: &Roll) -> BetResult<Self> {
+  pub fn result(&self, roll: &Roll) -> BetResult<Self> {
     let total = roll.total();
 
     match (self.target, total) {
@@ -64,7 +64,7 @@ impl RaceBet {
   }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(PartialEq, Clone)]
 pub enum Bet {
   Pass(RaceBet),
   PassOdds(u32, u8),
@@ -77,13 +77,31 @@ pub enum Bet {
   Field(u32),
 }
 
+impl std::fmt::Debug for Bet {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    match self {
+      Bet::Pass(race) => write!(formatter, "pass[{} on {:?}]", race.amount, race.target),
+      Bet::Come(race) => write!(formatter, "come[{} on {:?}]", race.amount, race.target),
+      Bet::PassOdds(amount, target) => write!(formatter, "pass-odds[{} on {}]", amount, target),
+      Bet::ComeOdds(amount, target) => write!(formatter, "come-odds[{} on {}]", amount, target),
+      Bet::Field(amount) => write!(formatter, "field[{}]", amount),
+      Bet::Place(amount, target) => write!(formatter, "place[{} on {}]", amount, target),
+    }
+  }
+}
+
 fn odds_result(total: u8, target: u8, wager: u32) -> BetResult<(u32, u8)> {
   if total == 7 {
     return BetResult::Loss;
   }
 
   if total == target {
-    return BetResult::Win(wager);
+    return match target {
+      4 | 10 => return BetResult::Win((wager * 2) + wager),
+      5 | 9 => return BetResult::Win((wager * 2) + wager),
+      6 | 8 => return BetResult::Win((wager * 2) + wager),
+      _ => BetResult::Noop((wager, target)),
+    };
   }
 
   BetResult::Noop((wager, target))
@@ -98,20 +116,34 @@ impl Bet {
     Bet::Pass(RaceBet { amount, target: None })
   }
 
-  pub fn result(self, roll: &Roll) -> BetResult<Self> {
+  pub fn come_target(&self) -> Option<u8> {
+    match self {
+      Bet::Come(race) => race.target,
+      _ => None,
+    }
+  }
+
+  pub fn pass_target(&self) -> Option<u8> {
+    match self {
+      Bet::Pass(race) => race.target,
+      _ => None,
+    }
+  }
+
+  pub fn result(&self, roll: &Roll) -> BetResult<Self> {
     let total = roll.total();
 
     match self {
       Bet::Pass(race) => race.result(roll).map(Bet::Pass),
-      Bet::Come(race) => race.result(roll).map(Bet::Pass),
+      Bet::Come(race) => race.result(roll).map(Bet::Come),
       Bet::PassOdds(amount, target) => {
-        odds_result(total, target, amount).map(|(amount, target)| Bet::PassOdds(amount, target))
+        odds_result(total, *target, *amount).map(|(amount, target)| Bet::PassOdds(amount, target))
       }
       Bet::ComeOdds(amount, target) => {
-        odds_result(total, target, amount).map(|(amount, target)| Bet::ComeOdds(amount, target))
+        odds_result(total, *target, *amount).map(|(amount, target)| Bet::ComeOdds(amount, target))
       }
       Bet::Place(amount, target) => {
-        odds_result(total, target, amount).map(|(amount, target)| Bet::Place(amount, target))
+        odds_result(total, *target, *amount).map(|(amount, target)| Bet::Place(amount, target))
       }
       Bet::Field(amount) => match total {
         2 | 12 => BetResult::Win((amount * 2) + amount),

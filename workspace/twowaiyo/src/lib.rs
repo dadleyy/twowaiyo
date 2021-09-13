@@ -3,9 +3,12 @@ use std::collections::HashMap;
 use uuid;
 
 pub mod bets;
+pub mod checks;
 pub mod errors;
 pub mod io;
 pub mod roll;
+
+pub mod constants;
 
 use bets::Bet;
 use roll::Roll;
@@ -23,6 +26,34 @@ impl Seat {
     Seat {
       balance,
       ..Self::default()
+    }
+  }
+
+  pub fn normalize_bet(&self, bet: &Bet) -> Option<Bet> {
+    match bet {
+      Bet::PassOdds(amount, _) => {
+        log::debug!("pass odds received, checking match");
+        self
+          .bets
+          .iter()
+          .find_map(|b| b.pass_target())
+          .map(|target| Bet::PassOdds(*amount, target))
+      }
+
+      Bet::ComeOdds(amount, target) => {
+        log::debug!("pass odds received, checking match");
+
+        self
+          .bets
+          .iter()
+          .find_map(|b| {
+            b.come_target()
+              .and_then(|inner| if inner == *target { Some(target) } else { None })
+          })
+          .map(|target| Bet::ComeOdds(*amount, *target))
+      }
+
+      _ => Some(bet.clone()),
     }
   }
 }
@@ -44,10 +75,14 @@ fn apply_bet(mut table: Table, player: &Player, bet: &Bet) -> Result<Table, Carr
     return Err(CarryError::new(table, "insufficient funds"));
   }
 
+  let normalized = seat
+    .normalize_bet(bet)
+    .ok_or_else(|| CarryError::new(table.clone(), "bad bet"))?;
+
   let bets = seat
     .bets
     .iter()
-    .chain(Some(bet))
+    .chain(Some(&normalized))
     .map(|b| b.clone())
     .collect::<Vec<Bet>>();
 
@@ -84,8 +119,10 @@ impl std::fmt::Debug for Table {
 impl Table {
   pub fn bet(self, player: &Player, bet: &Bet) -> Result<Self, CarryError<Self>> {
     let valid = match (self.button, bet) {
-      (Some(_), Bet::Pass(_)) => Err(CarryError::new(self, "invalid pass line bet with button established")),
-      (None, Bet::Come(_)) => Err(CarryError::new(self, "invalid come bet without button established")),
+      (Some(_), Bet::Pass(_)) => Err(CarryError::new(self, constants::PASS_ON_ERROR)),
+      (None, Bet::Place(_, _)) => Err(CarryError::new(self, constants::PLACE_OFF_ERROR)),
+      (None, Bet::Come(_)) => Err(CarryError::new(self, constants::COME_OFF_ERROR)),
+      (None, Bet::PassOdds(_, _)) => Err(CarryError::new(self, constants::PASS_ODDS_OFF_ERROR)),
       _ => Ok(self),
     };
 
@@ -128,6 +165,7 @@ impl Table {
 
         let (bets, winnings) = bets.into_iter().fold(start, |(remaining, winnings), item| {
           let result = item.result(&roll);
+          log::info!("{:<25} -> {:<25}", format!("{:?}", item), format!("{:?}", result));
           let winnings = winnings + result.winnings();
           let remaining = remaining.into_iter().chain(result.remaining()).collect();
           (remaining, winnings)

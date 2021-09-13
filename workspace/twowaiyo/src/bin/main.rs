@@ -17,8 +17,6 @@ fn main() -> Result<()> {
   let mut player = twowaiyo::Player::default();
   table = table.sit(&mut player);
 
-  log::debug!("initialized state {:?}", table);
-
   loop {
     log::info!("{:?}", table);
 

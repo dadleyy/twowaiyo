@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use super::Bet;
+use super::{checks, Bet};
 
 #[derive(Debug)]
 pub enum Action {
@@ -31,6 +31,21 @@ fn parse_bet_line(parts: &Vec<&str>) -> Option<Action> {
         .map(Action::Bet)
     }
 
+    ["bet", "place", target, value] => {
+      log::debug!("parsing come line bet - {}", value);
+      let parsed_target =
+        u8::from_str(target)
+          .map_err(log_pass)
+          .ok()
+          .and_then(|value| if checks::is_place(value) { Some(value) } else { None });
+      let parsed_value = u32::from_str(value).map_err(log_pass).ok();
+
+      parsed_target
+        .zip(parsed_value)
+        .map(|(target, value)| Bet::Place(value, target))
+        .map(Action::Bet)
+    }
+
     ["bet", "come", value] => {
       log::debug!("parsing come line bet - {}", value);
 
@@ -38,6 +53,28 @@ fn parse_bet_line(parts: &Vec<&str>) -> Option<Action> {
         .map_err(log_pass)
         .ok()
         .map(|amount| Bet::start_come(amount))
+        .map(Action::Bet)
+    }
+
+    ["bet", "come-odds", target, value] => {
+      log::debug!("parsing come odds - {} on {}", value, target);
+
+      let parsed_amount = u32::from_str(value).map_err(log_pass).ok();
+      let parsed_target = u8::from_str(target).map_err(log_pass).ok();
+
+      parsed_amount
+        .zip(parsed_target)
+        .map(|(amount, target)| Bet::ComeOdds(amount, target))
+        .map(Action::Bet)
+    }
+
+    ["bet", "pass-odds", value] => {
+      log::debug!("parsing pass odds - {}", value);
+
+      u32::from_str(value)
+        .map_err(log_pass)
+        .ok()
+        .map(|amount| Bet::PassOdds(amount, 0))
         .map(Action::Bet)
     }
 
