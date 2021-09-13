@@ -7,6 +7,19 @@ pub enum BetResult<T> {
   Loss,
 }
 
+impl<T> BetResult<T> {
+  pub fn map<F, U>(self, mapper: F) -> BetResult<U>
+  where
+    F: Fn(T) -> U,
+  {
+    match self {
+      BetResult::Win(amount) => BetResult::Win(amount),
+      BetResult::Loss => BetResult::Loss,
+      BetResult::Noop(item) => BetResult::Noop(mapper(item)),
+    }
+  }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct RaceBet {
   amount: u32,
@@ -48,6 +61,18 @@ pub enum Bet {
   Field(u32),
 }
 
+fn odds_result(total: u8, target: u8, wager: u32) -> BetResult<(u32, u8)> {
+  if total == 7 {
+    return BetResult::Loss;
+  }
+
+  if total == target {
+    return BetResult::Win(wager);
+  }
+
+  BetResult::Noop((wager, target))
+}
+
 impl Bet {
   pub fn start_come(amount: u32) -> Self {
     Bet::Come(RaceBet { amount, target: None })
@@ -55,6 +80,29 @@ impl Bet {
 
   pub fn start_pass(amount: u32) -> Self {
     Bet::Pass(RaceBet { amount, target: None })
+  }
+
+  pub fn result(self, roll: &Roll) -> BetResult<Self> {
+    let total = roll.total();
+
+    match self {
+      Bet::Pass(race) => race.result(roll).map(Bet::Pass),
+      Bet::Come(race) => race.result(roll).map(Bet::Pass),
+      Bet::PassOdds(amount, target) => {
+        odds_result(total, target, amount).map(|(amount, target)| Bet::PassOdds(amount, target))
+      }
+      Bet::ComeOdds(amount, target) => {
+        odds_result(total, target, amount).map(|(amount, target)| Bet::ComeOdds(amount, target))
+      }
+      Bet::Place(amount, target) => {
+        odds_result(total, target, amount).map(|(amount, target)| Bet::Place(amount, target))
+      }
+      Bet::Field(amount) => match amount {
+        2 | 12 => BetResult::Win(amount * 2),
+        3 | 4 | 9 | 10 | 11 => BetResult::Win(amount),
+        _ => BetResult::Loss,
+      },
+    }
   }
 
   pub fn weight(&self) -> u32 {
@@ -73,7 +121,7 @@ impl Bet {
 
 #[cfg(test)]
 mod test {
-  use super::{BetResult, RaceBet};
+  use super::{Bet, BetResult, RaceBet};
   use crate::roll::Roll;
 
   #[test]
@@ -365,5 +413,46 @@ mod test {
     let expected = bet.clone();
     let roll = vec![6u8, 6u8].into_iter().collect::<Roll>();
     assert_eq!(bet.result(&roll), BetResult::Noop(expected));
+  }
+
+  #[test]
+  fn test_start_pass_fail() {
+    let bet = Bet::start_pass(100);
+    let roll = vec![6u8, 6u8].into_iter().collect::<Roll>();
+    assert_eq!(bet.result(&roll), BetResult::Loss);
+  }
+
+  #[test]
+  fn test_start_pass_button() {
+    let bet = Bet::start_pass(100);
+    let roll = vec![6u8, 4u8].into_iter().collect::<Roll>();
+    assert_eq!(
+      bet.result(&roll),
+      BetResult::Noop(Bet::Pass(RaceBet {
+        amount: 100,
+        target: Some(10)
+      }))
+    );
+  }
+
+  #[test]
+  fn test_place_fail() {
+    let bet = Bet::Place(100, 10);
+    let roll = vec![3u8, 4u8].into_iter().collect::<Roll>();
+    assert_eq!(bet.result(&roll), BetResult::Loss);
+  }
+
+  #[test]
+  fn test_place_win() {
+    let bet = Bet::Place(100, 10);
+    let roll = vec![6u8, 4u8].into_iter().collect::<Roll>();
+    assert_eq!(bet.result(&roll), BetResult::Win(100));
+  }
+
+  #[test]
+  fn test_place_noop() {
+    let bet = Bet::Place(100, 10);
+    let roll = vec![2u8, 4u8].into_iter().collect::<Roll>();
+    assert_eq!(bet.result(&roll), BetResult::Noop(Bet::Place(100, 10)));
   }
 }
