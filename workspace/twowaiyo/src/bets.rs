@@ -104,31 +104,25 @@ fn odds_result(total: u8, target: u8, wager: u32, odds: Odds) -> BetResult<(u32,
     return BetResult::Noop((wager, target));
   }
 
-  match target {
-    4 | 10 => {
-      let added = match odds {
-        Odds::Place => (wager / 5) * 4,
-        Odds::Pass => wager,
-      };
+  let added = match target {
+    4 | 10 => match odds {
+      Odds::Place => Some((wager / 5) * 4),
+      Odds::Pass => Some(wager),
+    },
+    5 | 9 => match odds {
+      Odds::Place => Some((wager / 5) * 2),
+      Odds::Pass => Some(wager / 2),
+    },
+    6 | 8 => match odds {
+      Odds::Place => Some(wager / 6),
+      Odds::Pass => Some(wager / 5),
+    },
+    _ => None,
+  };
 
-      BetResult::Win((wager + added) + wager)
-    }
-    5 | 9 => {
-      let added = match odds {
-        Odds::Place => (wager / 5) * 2,
-        Odds::Pass => wager / 2,
-      };
-      BetResult::Win((wager + added) + wager)
-    }
-    6 | 8 => {
-      let added = match odds {
-        Odds::Place => wager / 6,
-        Odds::Pass => wager / 5,
-      };
-      BetResult::Win((wager + added) + wager)
-    }
-    _ => BetResult::Noop((wager, target)),
-  }
+  added
+    .map(|addition| BetResult::Win(wager + addition + wager))
+    .unwrap_or(BetResult::Noop((wager, target)))
 }
 
 impl Bet {
