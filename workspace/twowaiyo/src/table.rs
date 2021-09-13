@@ -31,23 +31,6 @@ fn apply_bet(mut table: Table, player: &Player, bet: &Bet) -> Result<Table, Carr
   Ok(table)
 }
 
-impl std::fmt::Debug for Table {
-  fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-    writeln!(formatter, "table")?;
-    writeln!(formatter, "button:    {:?}", self.button)?;
-    writeln!(formatter, "last roll: {:?}", self.rolls.get(0))?;
-
-    writeln!(formatter, "-- seats:")?;
-
-    for (key, seat) in self.seats.iter() {
-      writeln!(formatter, "id:      {}", key)?;
-      writeln!(formatter, "{:?}", seat)?;
-    }
-
-    Ok(())
-  }
-}
-
 impl Table {
   pub fn bet(self, player: &Player, bet: &Bet) -> Result<Self, CarryError<Self>> {
     let valid = match (self.button, bet) {
@@ -88,27 +71,7 @@ impl Table {
 
     log::debug!("generated roll - {:?}, result: {:?}", roll, result);
 
-    let seats = self
-      .seats
-      .into_iter()
-      .map(|(k, v)| {
-        /*
-        let Seat { bets, balance } = v;
-        let start: (Vec<Bet>, u32) = (vec![], 0);
-
-        let (bets, winnings) = bets.into_iter().fold(start, |(remaining, winnings), item| {
-          let result = item.result(&roll);
-          log::info!("{:<25} -> {:<25}", format!("{:?}", item), format!("{:?}", result));
-          let winnings = winnings + result.winnings();
-          let remaining = remaining.into_iter().chain(result.remaining()).collect();
-          (remaining, winnings)
-        });
-
-        let balance = balance + winnings;
-        */
-        (k, v.roll(&roll))
-      })
-      .collect();
+    let seats = self.seats.into_iter().map(|(k, v)| (k, v.roll(&roll))).collect();
 
     let rolls = Some(roll)
       .into_iter()
@@ -118,8 +81,21 @@ impl Table {
 
     Table { seats, rolls, button }
   }
+}
 
-  pub fn payouts(&self, _id: String) -> Vec<Bet> {
-    return Vec::new();
+impl std::fmt::Debug for Table {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    writeln!(formatter, "table")?;
+    writeln!(formatter, "button:    {:?}", self.button)?;
+    writeln!(formatter, "last roll: {:?}", self.rolls.get(0))?;
+
+    writeln!(formatter, "-- seats:")?;
+
+    for (key, seat) in self.seats.iter() {
+      writeln!(formatter, "id:      {}", key)?;
+      writeln!(formatter, "{:?}", seat)?;
+    }
+
+    Ok(())
   }
 }
