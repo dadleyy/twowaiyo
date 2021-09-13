@@ -12,51 +12,6 @@ use roll::Roll;
 
 use errors::CarryError;
 
-#[derive(Default, Clone)]
-pub struct Dealer {
-  player: Player,
-  table: Table,
-}
-
-impl std::fmt::Debug for Dealer {
-  fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(formatter, "{:?}", self.table)
-  }
-}
-
-impl Dealer {
-  pub fn new(table: Table, player: Player) -> Self {
-    let table = table.sit(&player);
-    Dealer { table, player }
-  }
-
-  pub fn roll(self) -> Self {
-    let Dealer { table, player } = self;
-    let new_table = table.roll();
-    Dealer {
-      table: new_table,
-      player,
-    }
-  }
-
-  pub fn bet(self, bet: &Bet) -> Result<Self, CarryError<Self>> {
-    let Dealer { player, table } = self;
-
-    table
-      .bet(&player, bet)
-      .map_err(|error| {
-        log::warn!("unable to apply bet, should skip");
-        let reason = format!("{:?}", error);
-        let dealer = Dealer {
-          table: error.consume(),
-          player: player.clone(),
-        };
-        CarryError::new(dealer, reason.as_str())
-      })
-      .and_then(|table| Ok(Dealer { table, player }))
-  }
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct Seat {
   bets: Vec<Bet>,
@@ -113,7 +68,8 @@ impl std::fmt::Debug for Table {
     writeln!(formatter, "last roll: {:?}", self.rolls.get(0))?;
 
     writeln!(formatter, "-- seats:")?;
-    for (_, seat) in self.seats.iter() {
+    for (key, seat) in self.seats.iter() {
+      writeln!(formatter, "  id:      {}", key)?;
       writeln!(formatter, "  balance: {}", seat.balance)?;
       writeln!(formatter, "  -- bets:")?;
       for bet in seat.bets.iter() {
@@ -136,7 +92,7 @@ impl Table {
     valid.and_then(|table| apply_bet(table, player, bet))
   }
 
-  pub fn sit(self, player: &Player) -> Self {
+  pub fn sit(self, player: &mut Player) -> Self {
     let Table {
       button,
       mut seats,
@@ -144,6 +100,7 @@ impl Table {
     } = self;
 
     seats.insert(player.id, Seat::with_balance(player.balance));
+    player.balance = 0;
     Table { button, seats, rolls }
   }
 

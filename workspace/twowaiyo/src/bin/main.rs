@@ -13,14 +13,14 @@ fn main() -> Result<()> {
   env_logger::init();
   log::info!("logger initialized, preparing table");
 
-  let table = twowaiyo::Table::default();
-  let player = twowaiyo::Player::default();
-  let mut dealer = twowaiyo::Dealer::new(table, player);
+  let mut table = twowaiyo::Table::default();
+  let mut player = twowaiyo::Player::default();
+  table = table.sit(&mut player);
 
-  log::debug!("initialized state {:?}", dealer);
+  log::debug!("initialized state {:?}", table);
 
   loop {
-    log::info!("{:?}", dealer);
+    log::info!("{:?}", table);
 
     let mut buffer = String::with_capacity(32);
 
@@ -42,13 +42,13 @@ fn main() -> Result<()> {
 
       Some(twowaiyo::io::Action::Roll) => {
         log::info!("throwing die...");
-        dealer = dealer.roll();
+        table = table.roll();
       }
       Some(twowaiyo::io::Action::Bet(bet)) => {
         log::info!("attempting bet - {:?}", bet);
 
-        dealer = dealer
-          .bet(&bet)
+        table = table
+          .bet(&player, &bet)
           .map_err(|carry| {
             log::warn!("invalid bet - {:?}", carry);
             carry.consume()

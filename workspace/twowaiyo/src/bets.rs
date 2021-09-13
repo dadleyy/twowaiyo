@@ -113,7 +113,7 @@ impl Bet {
       Bet::Place(amount, target) => {
         odds_result(total, target, amount).map(|(amount, target)| Bet::Place(amount, target))
       }
-      Bet::Field(amount) => match amount {
+      Bet::Field(amount) => match total {
         2 | 12 => BetResult::Win((amount * 2) + amount),
         3 | 4 | 9 | 10 | 11 => BetResult::Win(amount + amount),
         _ => BetResult::Loss,

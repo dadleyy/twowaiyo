@@ -21,6 +21,16 @@ fn parse_bet_line(parts: &Vec<&str>) -> Option<Action> {
   log::debug!("parsing bet string - '{:?}'", parts);
 
   match parts[..] {
+    ["bet", "field", value] => {
+      log::debug!("parsing field bet - {}", value);
+
+      u32::from_str(value)
+        .map_err(log_pass)
+        .ok()
+        .map(Bet::Field)
+        .map(Action::Bet)
+    }
+
     ["bet", "come", value] => {
       log::debug!("parsing come line bet - {}", value);
 
