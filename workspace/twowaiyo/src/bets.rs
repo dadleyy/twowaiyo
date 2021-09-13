@@ -95,16 +95,22 @@ fn odds_result(total: u8, target: u8, wager: u32) -> BetResult<(u32, u8)> {
     return BetResult::Loss;
   }
 
-  if total == target {
-    return match target {
-      4 | 10 => return BetResult::Win((wager * 2) + wager),
-      5 | 9 => return BetResult::Win((wager * 2) + wager),
-      6 | 8 => return BetResult::Win((wager * 2) + wager),
-      _ => BetResult::Noop((wager, target)),
-    };
+  if total != target {
+    return BetResult::Noop((wager, target));
   }
 
-  BetResult::Noop((wager, target))
+  match target {
+    4 | 10 => BetResult::Win((wager * 2) + wager),
+    5 | 9 => {
+      let half = wager / 2;
+      BetResult::Win((wager + half) + wager)
+    }
+    6 | 8 => {
+      let fifth = wager / 5;
+      BetResult::Win((wager + fifth) + wager)
+    }
+    _ => BetResult::Noop((wager, target)),
+  }
 }
 
 impl Bet {
@@ -491,10 +497,24 @@ mod test {
   }
 
   #[test]
-  fn test_place_win() {
-    let bet = Bet::Place(100, 10);
+  fn test_place_win_ten() {
+    let bet = Bet::Place(30, 10);
     let roll = vec![6u8, 4u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Win(100));
+    assert_eq!(bet.result(&roll), BetResult::Win(90));
+  }
+
+  #[test]
+  fn test_place_win_nine() {
+    let bet = Bet::Place(30, 9);
+    let roll = vec![6u8, 3u8].into_iter().collect::<Roll>();
+    assert_eq!(bet.result(&roll), BetResult::Win(75));
+  }
+
+  #[test]
+  fn test_place_win_eight() {
+    let bet = Bet::Place(5, 8);
+    let roll = vec![4u8, 4u8].into_iter().collect::<Roll>();
+    assert_eq!(bet.result(&roll), BetResult::Win(11));
   }
 
   #[test]
