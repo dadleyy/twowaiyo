@@ -90,7 +90,12 @@ impl std::fmt::Debug for Bet {
   }
 }
 
-fn odds_result(total: u8, target: u8, wager: u32) -> BetResult<(u32, u8)> {
+enum Odds {
+  Place,
+  Pass,
+}
+
+fn odds_result(total: u8, target: u8, wager: u32, odds: Odds) -> BetResult<(u32, u8)> {
   if total == 7 {
     return BetResult::Loss;
   }
@@ -100,14 +105,27 @@ fn odds_result(total: u8, target: u8, wager: u32) -> BetResult<(u32, u8)> {
   }
 
   match target {
-    4 | 10 => BetResult::Win((wager * 2) + wager),
+    4 | 10 => {
+      let added = match odds {
+        Odds::Place => (wager / 5) * 4,
+        Odds::Pass => wager,
+      };
+
+      BetResult::Win((wager + added) + wager)
+    }
     5 | 9 => {
-      let half = wager / 2;
-      BetResult::Win((wager + half) + wager)
+      let added = match odds {
+        Odds::Place => (wager / 5) * 2,
+        Odds::Pass => wager / 2,
+      };
+      BetResult::Win((wager + added) + wager)
     }
     6 | 8 => {
-      let fifth = wager / 5;
-      BetResult::Win((wager + fifth) + wager)
+      let added = match odds {
+        Odds::Place => wager / 6,
+        Odds::Pass => wager / 5,
+      };
+      BetResult::Win((wager + added) + wager)
     }
     _ => BetResult::Noop((wager, target)),
   }
@@ -143,13 +161,13 @@ impl Bet {
       Bet::Pass(race) => race.result(roll).map(Bet::Pass),
       Bet::Come(race) => race.result(roll).map(Bet::Come),
       Bet::PassOdds(amount, target) => {
-        odds_result(total, *target, *amount).map(|(amount, target)| Bet::PassOdds(amount, target))
+        odds_result(total, *target, *amount, Odds::Pass).map(|(amount, target)| Bet::PassOdds(amount, target))
       }
       Bet::ComeOdds(amount, target) => {
-        odds_result(total, *target, *amount).map(|(amount, target)| Bet::ComeOdds(amount, target))
+        odds_result(total, *target, *amount, Odds::Pass).map(|(amount, target)| Bet::ComeOdds(amount, target))
       }
       Bet::Place(amount, target) => {
-        odds_result(total, *target, *amount).map(|(amount, target)| Bet::Place(amount, target))
+        odds_result(total, *target, *amount, Odds::Place).map(|(amount, target)| Bet::Place(amount, target))
       }
       Bet::Field(amount) => match total {
         2 | 12 => BetResult::Win((amount * 2) + amount),
@@ -497,24 +515,45 @@ mod test {
   }
 
   #[test]
+  fn test_pass_win_ten() {
+    let bet = Bet::PassOdds(30, 10);
+    let roll = vec![6u8, 4u8].into_iter().collect::<Roll>();
+    assert_eq!(bet.result(&roll), BetResult::Win(90));
+  }
+
+  #[test]
+  fn test_pass_win_nine() {
+    let bet = Bet::PassOdds(30, 9);
+    let roll = vec![6u8, 3u8].into_iter().collect::<Roll>();
+    assert_eq!(bet.result(&roll), BetResult::Win(75));
+  }
+
+  #[test]
+  fn test_pass_win_eight() {
+    let bet = Bet::PassOdds(500, 8);
+    let roll = vec![4u8, 4u8].into_iter().collect::<Roll>();
+    assert_eq!(bet.result(&roll), BetResult::Win(1100));
+  }
+
+  #[test]
   fn test_place_win_ten() {
     let bet = Bet::Place(30, 10);
     let roll = vec![6u8, 4u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Win(90));
+    assert_eq!(bet.result(&roll), BetResult::Win(84));
   }
 
   #[test]
   fn test_place_win_nine() {
     let bet = Bet::Place(30, 9);
     let roll = vec![6u8, 3u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Win(75));
+    assert_eq!(bet.result(&roll), BetResult::Win(72));
   }
 
   #[test]
   fn test_place_win_eight() {
-    let bet = Bet::Place(5, 8);
+    let bet = Bet::Place(500, 8);
     let roll = vec![4u8, 4u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Win(11));
+    assert_eq!(bet.result(&roll), BetResult::Win(1083));
   }
 
   #[test]
