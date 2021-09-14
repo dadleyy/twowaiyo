@@ -10,6 +10,17 @@ pub enum Hardway {
   Ten,
 }
 
+impl From<&Hardway> for u8 {
+  fn from(way: &Hardway) -> u8 {
+    match way {
+      Hardway::Four => 4,
+      Hardway::Six => 6,
+      Hardway::Eight => 8,
+      Hardway::Ten => 10,
+    }
+  }
+}
+
 #[derive(Clone, PartialEq)]
 pub struct Roll(u8, u8);
 

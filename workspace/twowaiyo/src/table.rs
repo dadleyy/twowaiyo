@@ -7,11 +7,53 @@ use super::player::Player;
 use super::roll::Roll;
 use super::seat::Seat;
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Table {
+  id: uuid::Uuid,
   button: Option<u8>,
   seats: HashMap<uuid::Uuid, Seat>,
   rolls: Vec<Roll>,
+}
+
+impl From<bankah::TableState> for Table {
+  fn from(state: bankah::TableState) -> Self {
+    Table {
+      id: uuid::Uuid::parse_str(&state.id).unwrap_or_default(),
+      button: state.button,
+      ..Table::default()
+    }
+  }
+}
+
+impl From<&Table> for bankah::TableState {
+  fn from(table: &Table) -> bankah::TableState {
+    let seats = table
+      .seats
+      .iter()
+      .map(|(id, seat)| (id.to_string(), seat.into()))
+      .collect();
+
+    bankah::TableState {
+      seats,
+      id: table.identifier(),
+      button: table.button.clone(),
+      ..bankah::TableState::default()
+    }
+  }
+}
+
+impl Default for Table {
+  fn default() -> Self {
+    let rolls = Vec::with_capacity(2);
+    let id = uuid::Uuid::new_v4();
+    let seats = HashMap::with_capacity(100);
+    Table {
+      id,
+      button: None,
+      seats,
+      rolls,
+    }
+  }
 }
 
 fn apply_bet(mut table: Table, player: &Player, bet: &Bet) -> Result<Table, errors::CarryError<Table>> {
@@ -31,6 +73,10 @@ fn apply_bet(mut table: Table, player: &Player, bet: &Bet) -> Result<Table, erro
 }
 
 impl Table {
+  pub fn identifier(&self) -> String {
+    self.id.to_string()
+  }
+
   pub fn bet(self, player: &Player, bet: &Bet) -> Result<Self, errors::CarryError<Self>> {
     let valid = match (self.button, bet) {
       (Some(_), Bet::Pass(_)) => Err(errors::CarryError::new(self, errors::PASS_LINE_ALREADY_ON)),
@@ -46,6 +92,7 @@ impl Table {
 
   pub fn sit(self, player: &mut Player) -> Self {
     let Table {
+      id,
       button,
       mut seats,
       rolls,
@@ -53,7 +100,12 @@ impl Table {
 
     seats.insert(player.id, Seat::with_balance(player.balance));
     player.balance = 0;
-    Table { button, seats, rolls }
+    Table {
+      id,
+      button,
+      seats,
+      rolls,
+    }
   }
 
   pub fn roll(self) -> Self {
@@ -79,13 +131,18 @@ impl Table {
       .take(2)
       .collect::<Vec<Roll>>();
 
-    Table { seats, rolls, button }
+    Table {
+      id: self.id,
+      seats,
+      rolls,
+      button,
+    }
   }
 }
 
 impl std::fmt::Debug for Table {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-    writeln!(formatter, "table")?;
+    writeln!(formatter, "table {}", self.id)?;
     writeln!(formatter, "button:    {:?}", self.button)?;
     writeln!(formatter, "last roll: {:?}", self.rolls.get(0))?;
 

@@ -9,5 +9,6 @@ mod table;
 
 pub mod io;
 
+pub use bets::Bet;
 pub use player::Player;
 pub use table::Table;

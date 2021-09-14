@@ -3,10 +3,19 @@ name = "stickman"
 version = "0.1.0"
 edition = "2018"
 
+[lib]
+name = "stickman"
+path = "src/lib.rs"
+
 [[bin]]
 name = "stickman"
 path = "src/bin/main.rs"
 
 [dependencies]
+dotenv = { version = "0.15.0" }
+env_logger = { version = "^0.9.0" }
+log = { version = "^0.4.1" }
 twowaiyo = { path =  "../twowaiyo" }
+bankah = { path =  "../bankah" }
 async-std = { version = "^1.5.0" }
+mongodb = { version = "^2.0.0", features = ["async-std-runtime"], default-features = false }

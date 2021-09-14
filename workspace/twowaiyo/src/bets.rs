@@ -79,6 +79,20 @@ pub enum Bet {
   Hardway(u32, Hardway),
 }
 
+impl From<&Bet> for bankah::BetState {
+  fn from(bet: &Bet) -> bankah::BetState {
+    match bet {
+      Bet::Pass(race) => bankah::BetState::Race(bankah::RaceType::Pass, race.amount, race.target),
+      Bet::PassOdds(amount, target) => bankah::BetState::Target(bankah::TargetKind::PassOdds, *amount, *target),
+      Bet::Come(race) => bankah::BetState::Race(bankah::RaceType::Come, race.amount, race.target),
+      Bet::ComeOdds(amount, target) => bankah::BetState::Target(bankah::TargetKind::ComeOdds, *amount, *target),
+      Bet::Place(amount, target) => bankah::BetState::Target(bankah::TargetKind::Place, *amount, *target),
+      Bet::Hardway(amount, target) => bankah::BetState::Target(bankah::TargetKind::Hardway, *amount, target.into()),
+      Bet::Field(amount) => bankah::BetState::Field(*amount),
+    }
+  }
+}
+
 impl std::fmt::Debug for Bet {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {

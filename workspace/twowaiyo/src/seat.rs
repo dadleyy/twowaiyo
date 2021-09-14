@@ -10,6 +10,15 @@ pub struct Seat {
   balance: u32,
 }
 
+impl From<&Seat> for bankah::SeatState {
+  fn from(seat: &Seat) -> bankah::SeatState {
+    bankah::SeatState {
+      balance: seat.balance,
+      bets: seat.bets.iter().map(|b| b.into()).collect(),
+    }
+  }
+}
+
 impl std::fmt::Debug for Seat {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     writeln!(formatter, "balance: {}", self.balance)?;
