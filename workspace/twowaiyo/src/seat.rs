@@ -1,4 +1,8 @@
-use super::{bets::Bet, errors::CarryError, roll::Roll};
+use super::{
+  bets::Bet,
+  errors::{CarryError, PlayerBetViolation, RuleViolation},
+  roll::Roll,
+};
 
 #[derive(Clone, Default)]
 pub struct Seat {
@@ -55,15 +59,15 @@ impl Seat {
       })
       .map_err(|error| {
         let seat = Seat { ..self };
-        CarryError::new(seat, format!("{:?}", error).as_str())
+        CarryError::new(seat, RuleViolation::PlayerBetViolation(error))
       })
   }
 
-  fn normalize_bet(&self, bet: &Bet) -> Result<Bet, SeatBetError> {
+  fn normalize_bet(&self, bet: &Bet) -> Result<Bet, PlayerBetViolation> {
     let weight = bet.weight();
 
     if weight > self.balance {
-      return Err(SeatBetError::InsufficientFunds);
+      return Err(PlayerBetViolation::InsufficientFunds);
     }
 
     match bet {
@@ -74,7 +78,7 @@ impl Seat {
           .iter()
           .find_map(|b| b.pass_target())
           .map(|target| Bet::PassOdds(*amount, target))
-          .ok_or(SeatBetError::PassOds)
+          .ok_or(PlayerBetViolation::MissingPassForOdds)
       }
 
       Bet::ComeOdds(amount, target) => {
@@ -88,17 +92,10 @@ impl Seat {
               .and_then(|inner| if inner == *target { Some(target) } else { None })
           })
           .map(|target| Bet::ComeOdds(*amount, *target))
-          .ok_or(SeatBetError::ComeOdds)
+          .ok_or(PlayerBetViolation::MissingComeForOdds)
       }
 
       _ => Ok(bet.clone()),
     }
   }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum SeatBetError {
-  InsufficientFunds,
-  PassOds,
-  ComeOdds,
 }

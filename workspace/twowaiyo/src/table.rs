@@ -2,8 +2,7 @@ use std::collections::HashMap;
 use uuid;
 
 use super::bets::Bet;
-use super::constants;
-use super::errors::CarryError;
+use super::errors;
 use super::player::Player;
 use super::roll::Roll;
 use super::seat::Seat;
@@ -15,11 +14,11 @@ pub struct Table {
   rolls: Vec<Roll>,
 }
 
-fn apply_bet(mut table: Table, player: &Player, bet: &Bet) -> Result<Table, CarryError<Table>> {
+fn apply_bet(mut table: Table, player: &Player, bet: &Bet) -> Result<Table, errors::CarryError<Table>> {
   let seat = table
     .seats
     .remove(&player.id)
-    .ok_or_else(|| CarryError::new(table.clone(), "missing seat"))?;
+    .ok_or_else(|| errors::CarryError::new(table.clone(), errors::RuleViolation::InvalidSeat))?;
 
   let updated = seat.bet(bet).unwrap_or_else(|error| {
     log::warn!("unable to make bet - {:?}", error);
@@ -32,13 +31,13 @@ fn apply_bet(mut table: Table, player: &Player, bet: &Bet) -> Result<Table, Carr
 }
 
 impl Table {
-  pub fn bet(self, player: &Player, bet: &Bet) -> Result<Self, CarryError<Self>> {
+  pub fn bet(self, player: &Player, bet: &Bet) -> Result<Self, errors::CarryError<Self>> {
     let valid = match (self.button, bet) {
-      (Some(_), Bet::Pass(_)) => Err(CarryError::new(self, constants::PASS_ON_ERROR)),
-      (None, Bet::Place(_, _)) => Err(CarryError::new(self, constants::PLACE_OFF_ERROR)),
-      (None, Bet::Come(_)) => Err(CarryError::new(self, constants::COME_OFF_ERROR)),
-      (None, Bet::PassOdds(_, _)) => Err(CarryError::new(self, constants::PASS_ODDS_OFF_ERROR)),
-      (None, Bet::Hardway(_, _)) => Err(CarryError::new(self, constants::HARDWAY_OFF_ERROR)),
+      (Some(_), Bet::Pass(_)) => Err(errors::CarryError::new(self, errors::PASS_LINE_ALREADY_ON)),
+      (None, Bet::Place(_, _)) => Err(errors::CarryError::new(self, errors::PLACE_OFF_ERROR)),
+      (None, Bet::Come(_)) => Err(errors::CarryError::new(self, errors::COME_OFF_ERROR)),
+      (None, Bet::PassOdds(_, _)) => Err(errors::CarryError::new(self, errors::PASS_ODDS_OFF_ERROR)),
+      (None, Bet::Hardway(_, _)) => Err(errors::CarryError::new(self, errors::HARDWAY_OFF_ERROR)),
       _ => Ok(self),
     };
 
