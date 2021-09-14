@@ -1,4 +1,4 @@
-use super::roll::Roll;
+use super::roll::{Hardway, Roll};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum BetResult<T> {
@@ -75,6 +75,8 @@ pub enum Bet {
   Place(u32, u8),
 
   Field(u32),
+
+  Hardway(u32, Hardway),
 }
 
 impl std::fmt::Debug for Bet {
@@ -86,6 +88,7 @@ impl std::fmt::Debug for Bet {
       Bet::ComeOdds(amount, target) => write!(formatter, "come-odds[{} on {}]", amount, target),
       Bet::Field(amount) => write!(formatter, "field[{}]", amount),
       Bet::Place(amount, target) => write!(formatter, "place[{} on {}]", amount, target),
+      Bet::Hardway(amount, way) => write!(formatter, "hardway[{} on {:?}]", amount, way),
     }
   }
 }
@@ -168,6 +171,22 @@ impl Bet {
         3 | 4 | 9 | 10 | 11 => BetResult::Win(amount + amount),
         _ => BetResult::Loss,
       },
+      Bet::Hardway(amount, target) => {
+        if roll.easyway().map(|e| e == *target).unwrap_or(false) || total == 7 {
+          return BetResult::Loss;
+        }
+
+        if roll.hardway().map(|h| h == *target).unwrap_or(false) {
+          let payout = match target {
+            Hardway::Six | Hardway::Eight => (amount * 9) + amount,
+            Hardway::Four | Hardway::Ten => (amount * 7) + amount,
+          };
+
+          return BetResult::Win(payout);
+        }
+
+        return BetResult::Noop(Bet::Hardway(*amount, *target));
+      }
     }
   }
 
@@ -181,6 +200,7 @@ impl Bet {
 
       Bet::Place(amount, _) => *amount,
       Bet::Field(amount) => *amount,
+      Bet::Hardway(amount, _) => *amount,
     }
   }
 }
@@ -188,7 +208,71 @@ impl Bet {
 #[cfg(test)]
 mod test {
   use super::{Bet, BetResult, RaceBet};
-  use crate::roll::Roll;
+  use crate::roll::{Hardway, Roll};
+
+  #[test]
+  fn test_hit_hardway_four() {
+    let bet = Bet::Hardway(10, Hardway::Four);
+    let roll = vec![2u8, 2u8].into_iter().collect();
+    assert_eq!(bet.result(&roll), BetResult::Win(80));
+  }
+
+  #[test]
+  fn test_hit_hardway_six() {
+    let bet = Bet::Hardway(10, Hardway::Six);
+    let roll = vec![3u8, 3u8].into_iter().collect();
+    assert_eq!(bet.result(&roll), BetResult::Win(100));
+  }
+
+  #[test]
+  fn test_hit_hardway_eight() {
+    let bet = Bet::Hardway(10, Hardway::Eight);
+    let roll = vec![4u8, 4u8].into_iter().collect();
+    assert_eq!(bet.result(&roll), BetResult::Win(100));
+  }
+
+  #[test]
+  fn test_hit_hardway_ten() {
+    let bet = Bet::Hardway(10, Hardway::Ten);
+    let roll = vec![5u8, 5u8].into_iter().collect();
+    assert_eq!(bet.result(&roll), BetResult::Win(80));
+  }
+
+  #[test]
+  fn test_miss_hardway_four() {
+    let bet = Bet::Hardway(10, Hardway::Four);
+    let roll = vec![1u8, 3u8].into_iter().collect();
+    assert_eq!(bet.result(&roll), BetResult::Loss);
+    let roll = vec![1u8, 6u8].into_iter().collect();
+    assert_eq!(bet.result(&roll), BetResult::Loss);
+  }
+
+  #[test]
+  fn test_miss_hardway_six() {
+    let bet = Bet::Hardway(10, Hardway::Six);
+    let roll = vec![2u8, 4u8].into_iter().collect();
+    assert_eq!(bet.result(&roll), BetResult::Loss);
+    let roll = vec![1u8, 6u8].into_iter().collect();
+    assert_eq!(bet.result(&roll), BetResult::Loss);
+  }
+
+  #[test]
+  fn test_miss_hardway_eight() {
+    let bet = Bet::Hardway(10, Hardway::Eight);
+    let roll = vec![5u8, 3u8].into_iter().collect();
+    assert_eq!(bet.result(&roll), BetResult::Loss);
+    let roll = vec![1u8, 6u8].into_iter().collect();
+    assert_eq!(bet.result(&roll), BetResult::Loss);
+  }
+
+  #[test]
+  fn test_miss_hardway_ten() {
+    let bet = Bet::Hardway(10, Hardway::Ten);
+    let roll = vec![4u8, 6u8].into_iter().collect();
+    assert_eq!(bet.result(&roll), BetResult::Loss);
+    let roll = vec![1u8, 6u8].into_iter().collect();
+    assert_eq!(bet.result(&roll), BetResult::Loss);
+  }
 
   #[test]
   fn test_hit_race_off_two() {
@@ -530,24 +614,38 @@ mod test {
   }
 
   #[test]
+  fn test_place_win_four() {
+    let bet = Bet::Place(100, 4);
+    let roll = vec![2u8, 2u8].into_iter().collect::<Roll>();
+    assert_eq!(bet.result(&roll), BetResult::Win(280));
+  }
+
+  #[test]
+  fn test_place_win_six() {
+    let bet = Bet::Place(100, 6);
+    let roll = vec![3u8, 3u8].into_iter().collect::<Roll>();
+    assert_eq!(bet.result(&roll), BetResult::Win(216));
+  }
+
+  #[test]
   fn test_place_win_ten() {
-    let bet = Bet::Place(30, 10);
+    let bet = Bet::Place(100, 10);
     let roll = vec![6u8, 4u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Win(84));
+    assert_eq!(bet.result(&roll), BetResult::Win(280));
   }
 
   #[test]
   fn test_place_win_nine() {
-    let bet = Bet::Place(30, 9);
+    let bet = Bet::Place(100, 9);
     let roll = vec![6u8, 3u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Win(72));
+    assert_eq!(bet.result(&roll), BetResult::Win(240));
   }
 
   #[test]
   fn test_place_win_eight() {
-    let bet = Bet::Place(500, 8);
+    let bet = Bet::Place(100, 8);
     let roll = vec![4u8, 4u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Win(1083));
+    assert_eq!(bet.result(&roll), BetResult::Win(216));
   }
 
   #[test]

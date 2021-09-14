@@ -38,6 +38,7 @@ impl Table {
       (None, Bet::Place(_, _)) => Err(CarryError::new(self, constants::PLACE_OFF_ERROR)),
       (None, Bet::Come(_)) => Err(CarryError::new(self, constants::COME_OFF_ERROR)),
       (None, Bet::PassOdds(_, _)) => Err(CarryError::new(self, constants::PASS_ODDS_OFF_ERROR)),
+      (None, Bet::Hardway(_, _)) => Err(CarryError::new(self, constants::HARDWAY_OFF_ERROR)),
       _ => Ok(self),
     };
 

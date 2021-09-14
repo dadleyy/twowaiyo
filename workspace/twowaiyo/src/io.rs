@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use super::{bets::Bet, checks};
+use super::{bets::Bet, checks, roll::Hardway};
 
 #[derive(Debug)]
 pub enum Action {
@@ -45,6 +45,30 @@ fn parse_bet_line(parts: &Vec<&str>) -> Option<Action> {
         .map(|(target, value)| Bet::Place(value, target))
         .map(Action::Bet)
     }
+
+    ["bet", "hardway", "four", value] => u32::from_str(value)
+      .map_err(log_pass)
+      .ok()
+      .map(|amount| Bet::Hardway(amount, Hardway::Four))
+      .map(Action::Bet),
+
+    ["bet", "hardway", "six", value] => u32::from_str(value)
+      .map_err(log_pass)
+      .ok()
+      .map(|amount| Bet::Hardway(amount, Hardway::Six))
+      .map(Action::Bet),
+
+    ["bet", "hardway", "eight", value] => u32::from_str(value)
+      .map_err(log_pass)
+      .ok()
+      .map(|amount| Bet::Hardway(amount, Hardway::Eight))
+      .map(Action::Bet),
+
+    ["bet", "hardway", "ten", value] => u32::from_str(value)
+      .map_err(log_pass)
+      .ok()
+      .map(|amount| Bet::Hardway(amount, Hardway::Ten))
+      .map(Action::Bet),
 
     ["bet", "come", value] => {
       log::debug!("parsing come line bet - {}", value);

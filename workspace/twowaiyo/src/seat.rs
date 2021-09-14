@@ -53,17 +53,17 @@ impl Seat {
         let bets = self.bets.iter().chain(Some(&bet)).map(|b| b.clone()).collect();
         Seat { balance, bets }
       })
-      .ok_or_else(|| {
+      .map_err(|error| {
         let seat = Seat { ..self };
-        CarryError::new(seat, "bad bet")
+        CarryError::new(seat, format!("{:?}", error).as_str())
       })
   }
 
-  fn normalize_bet(&self, bet: &Bet) -> Option<Bet> {
+  fn normalize_bet(&self, bet: &Bet) -> Result<Bet, SeatBetError> {
     let weight = bet.weight();
 
     if weight > self.balance {
-      return None;
+      return Err(SeatBetError::InsufficientFunds);
     }
 
     match bet {
@@ -74,6 +74,7 @@ impl Seat {
           .iter()
           .find_map(|b| b.pass_target())
           .map(|target| Bet::PassOdds(*amount, target))
+          .ok_or(SeatBetError::PassOds)
       }
 
       Bet::ComeOdds(amount, target) => {
@@ -87,9 +88,17 @@ impl Seat {
               .and_then(|inner| if inner == *target { Some(target) } else { None })
           })
           .map(|target| Bet::ComeOdds(*amount, *target))
+          .ok_or(SeatBetError::ComeOdds)
       }
 
-      _ => Some(bet.clone()),
+      _ => Ok(bet.clone()),
     }
   }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum SeatBetError {
+  InsufficientFunds,
+  PassOds,
+  ComeOdds,
 }
