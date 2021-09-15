@@ -24,11 +24,14 @@ impl From<&Hardway> for u8 {
 #[derive(Clone, PartialEq)]
 pub struct Roll(u8, u8);
 
-impl FromIterator<u8> for Roll {
-  fn from_iter<T: IntoIterator<Item = u8>>(target: T) -> Self {
+impl<U> FromIterator<U> for Roll
+where
+  U: Into<u8>,
+{
+  fn from_iter<T: IntoIterator<Item = U>>(target: T) -> Self {
     let mut iter = target.into_iter();
-    let first = iter.next().unwrap_or_default();
-    let second = iter.next().unwrap_or_default();
+    let first = iter.next().map_or(0, |u| u.into());
+    let second = iter.next().map_or(0, |u| u.into());
     Roll(first, second)
   }
 }

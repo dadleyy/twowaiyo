@@ -4,7 +4,7 @@ use async_std;
 use dotenv;
 use env_logger;
 
-use stickman;
+use stickbot;
 use twowaiyo;
 
 fn log_table(table: twowaiyo::Table) {
@@ -16,14 +16,14 @@ fn main() -> Result<()> {
   env_logger::init();
 
   async_std::task::block_on(async {
-    let url = std::env::var(stickman::constants::MONGO_DB_ENV_URL).unwrap_or_default();
+    let url = std::env::var(stickbot::constants::MONGO_DB_ENV_URL).unwrap_or_default();
     log::debug!("loaded mongo url from env - ({} bytes)", url.len());
-    let mongo = stickman::db::connect(url).await?;
-    let db = mongo.database(stickman::constants::MONGO_DB_DATABASE_NAME);
+    let mongo = stickbot::db::connect(url).await?;
+    let db = mongo.database(stickbot::constants::MONGO_DB_DATABASE_NAME);
 
     let names = db.list_collection_names(None).await.unwrap_or_default();
     log::debug!("collection names - {:?}", names);
-    let collection = db.collection::<bankah::TableState>(stickman::constants::MONGO_DB_TABLE_COLLECTION_NAME);
+    let collection = db.collection::<bankah::TableState>(stickbot::constants::MONGO_DB_TABLE_COLLECTION_NAME);
 
     collection.drop(None).await.expect("unable to clear");
 
@@ -42,12 +42,12 @@ fn main() -> Result<()> {
     collection
       .insert_one(bankah::TableState::from(&table), None)
       .await
-      .map_err(stickman::db::mongo_error)?;
+      .map_err(stickbot::db::mongo_error)?;
 
     let cursor = collection
-      .find_one(stickman::db::doc! { "id": table.identifier() }, None)
+      .find_one(stickbot::db::doc! { "id": table.identifier() }, None)
       .await
-      .map_err(stickman::db::mongo_error)?;
+      .map_err(stickbot::db::mongo_error)?;
 
     if let Some(state) = cursor {
       log::debug!("loaded state from cursor - {:?}", state);

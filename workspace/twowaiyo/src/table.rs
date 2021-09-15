@@ -17,9 +17,24 @@ pub struct Table {
 
 impl From<bankah::TableState> for Table {
   fn from(state: bankah::TableState) -> Self {
+    let rolls = state
+      .rolls
+      .into_iter()
+      .map(|tupe| IntoIterator::into_iter([tupe.0, tupe.1]).collect())
+      .collect();
+
+    let seats = state
+      .seats
+      .iter()
+      .map(|(key, state)| (uuid::Uuid::parse_str(&key).unwrap_or_default(), state.into()))
+      .collect();
+
     Table {
+      rolls,
+      seats,
       id: uuid::Uuid::parse_str(&state.id).unwrap_or_default(),
       button: state.button,
+
       ..Table::default()
     }
   }

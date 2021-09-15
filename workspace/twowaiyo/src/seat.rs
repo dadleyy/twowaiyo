@@ -10,6 +10,15 @@ pub struct Seat {
   balance: u32,
 }
 
+impl From<&bankah::SeatState> for Seat {
+  fn from(seat: &bankah::SeatState) -> Seat {
+    Seat {
+      balance: seat.balance,
+      bets: vec![],
+    }
+  }
+}
+
 impl From<&Seat> for bankah::SeatState {
   fn from(seat: &Seat) -> bankah::SeatState {
     bankah::SeatState {

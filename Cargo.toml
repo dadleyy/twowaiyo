@@ -2,5 +2,5 @@
 members = [
   "workspace/twowaiyo",
   "workspace/bankah",
-  "workspace/stickman"
+  "workspace/stickbot"
 ]

@@ -1,14 +1,14 @@
 [package]
-name = "stickman"
+name = "stickbot"
 version = "0.1.0"
 edition = "2018"
 
 [lib]
-name = "stickman"
+name = "stickbot"
 path = "src/lib.rs"
 
 [[bin]]
-name = "stickman"
+name = "stickbot"
 path = "src/bin/main.rs"
 
 [dependencies]
