@@ -79,6 +79,31 @@ pub enum Bet {
   Hardway(u32, Hardway),
 }
 
+impl From<&bankah::BetState> for Bet {
+  fn from(state: &bankah::BetState) -> Bet {
+    match state {
+      bankah::BetState::Target(kind, amount, target) => match kind {
+        bankah::TargetKind::ComeOdds => Bet::ComeOdds(*amount, *target),
+        bankah::TargetKind::PassOdds => Bet::PassOdds(*amount, *target),
+        bankah::TargetKind::Place => Bet::Place(*amount, *target),
+        bankah::TargetKind::Hardway => Bet::Hardway(*amount, target.into()),
+      },
+
+      bankah::BetState::Race(kind, amount, target) => match kind {
+        bankah::RaceType::Pass => Bet::Pass(RaceBet {
+          amount: *amount,
+          target: target.clone(),
+        }),
+        bankah::RaceType::Come => Bet::Come(RaceBet {
+          amount: *amount,
+          target: target.clone(),
+        }),
+      },
+      _ => Bet::Hardway(10, Hardway::Ten),
+    }
+  }
+}
+
 impl From<&Bet> for bankah::BetState {
   fn from(bet: &Bet) -> bankah::BetState {
     match bet {

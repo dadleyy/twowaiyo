@@ -10,6 +10,18 @@ pub enum Hardway {
   Ten,
 }
 
+impl From<&u8> for Hardway {
+  fn from(way: &u8) -> Hardway {
+    match way {
+      4 => Hardway::Four,
+      6 => Hardway::Six,
+      8 => Hardway::Eight,
+      10 => Hardway::Ten,
+      _ => unreachable!(),
+    }
+  }
+}
+
 impl From<&Hardway> for u8 {
   fn from(way: &Hardway) -> u8 {
     match way {

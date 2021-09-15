@@ -12,9 +12,11 @@ pub struct Seat {
 
 impl From<&bankah::SeatState> for Seat {
   fn from(seat: &bankah::SeatState) -> Seat {
+    let bets = seat.bets.iter().map(|b| b.into()).collect();
+
     Seat {
+      bets,
       balance: seat.balance,
-      bets: vec![],
     }
   }
 }
