@@ -1,5 +1,9 @@
 use serde::Serialize;
 
+pub mod tables;
+
+use crate::web::{Body, Request, Response, Result};
+
 #[derive(Serialize)]
 struct Heartbeat {
   time: chrono::DateTime<chrono::offset::Utc>,
@@ -12,8 +16,8 @@ impl Default for Heartbeat {
   }
 }
 
-pub async fn heartbeat(_req: tide::Request<crate::Services>) -> tide::Result {
-  let body = tide::Body::from_json(&Heartbeat::default()).expect("");
-  let response = tide::Response::builder(200).body(body).build();
+pub async fn heartbeat(_req: Request) -> Result {
+  let body = Body::from_json(&Heartbeat::default()).expect("");
+  let response = Response::builder(200).body(body).build();
   Ok(response)
 }
