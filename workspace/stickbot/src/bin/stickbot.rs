@@ -5,16 +5,9 @@ use dotenv;
 use env_logger;
 
 use stickbot;
-use twowaiyo;
-
-fn log_table(table: twowaiyo::Table) {
-  log::debug!("{:?}", table);
-}
 
 fn main() -> Result<()> {
-  dotenv::dotenv().expect("unable to load environment from '.env'");
-  env_logger::init();
-
+  /*
   async_std::task::block_on(async {
     let url = std::env::var(stickbot::constants::MONGO_DB_ENV_URL).unwrap_or_default();
     log::debug!("loaded mongo url from env - ({} bytes)", url.len());
@@ -55,6 +48,22 @@ fn main() -> Result<()> {
     }
 
     println!("new table - {:?}", table);
+    Ok(())
+  })
+  */
+
+  async_std::task::block_on(async {
+    dotenv::dotenv().expect("unable to load environment from '.env'");
+    env_logger::init();
+
+    let addr = std::env::var(stickbot::constants::STICKBOT_HTTP_ADDR_ENV).unwrap_or_default();
+    log::info!("spawning tide server on {}, connecting services", addr);
+    let services = stickbot::Services::new().await?;
+    log::info!("services ready, creating application");
+    let mut app = tide::with_state(services);
+    app.at("/heartbeat").get(stickbot::routes::heartbeat);
+    log::info!("application ready, spawning");
+    app.listen(&addr).await?;
     Ok(())
   })
 }

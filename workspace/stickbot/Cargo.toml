@@ -9,7 +9,11 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "stickbot"
-path = "src/bin/main.rs"
+path = "src/bin/stickbot.rs"
+
+[[bin]]
+name = "boxbot"
+path = "src/bin/boxbot.rs"
 
 [dependencies]
 dotenv = { version = "0.15.0" }
@@ -19,3 +23,6 @@ twowaiyo = { path =  "../twowaiyo" }
 bankah = { path =  "../bankah" }
 async-std = { version = "^1.5.0" }
 mongodb = { version = "^2.0.0", features = ["async-std-runtime"], default-features = false }
+tide = { version = "^0.16.0" }
+serde = { version = "^1.0", features = ["derive"] }
+chrono = { version = "^0.4", features = ["serde"] }
