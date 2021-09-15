@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+pub mod auth;
 pub mod tables;
 
 use crate::web::{Body, Request, Response, Result};

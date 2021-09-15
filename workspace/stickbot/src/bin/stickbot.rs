@@ -21,6 +21,10 @@ fn main() -> Result<()> {
     app.at("/create-table").get(stickbot::routes::tables::create);
     app.at("/drop-tables").get(stickbot::routes::tables::drop_all);
 
+    app.at("/auth/start").get(stickbot::routes::auth::start);
+    app.at("/auth/complete").get(stickbot::routes::auth::complete);
+    app.at("/auth/identify").get(stickbot::routes::auth::identify);
+
     log::info!("application ready, spawning");
     app.listen(&addr).await?;
     Ok(())
