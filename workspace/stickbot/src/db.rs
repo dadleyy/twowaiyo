@@ -6,7 +6,7 @@ use super::constants;
 
 pub use mongodb::bson;
 pub use mongodb::bson::doc;
-pub use mongodb::options::{FindOneAndUpdateOptions, UpdateModifications};
+pub use mongodb::options::{FindOneAndUpdateOptions, ReturnDocument, UpdateModifications};
 pub use mongodb::{Client, Collection};
 
 pub fn mongo_error(error: mongodb::error::Error) -> Error {

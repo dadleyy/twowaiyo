@@ -154,7 +154,11 @@ pub async fn complete(request: Request) -> Result {
     .state()
     .collection::<bankah::Player, _>(constants::MONGO_DB_PLAYER_COLLECTION_NAME);
 
-  let options = db::FindOneAndUpdateOptions::builder().upsert(true).build();
+  let options = db::FindOneAndUpdateOptions::builder()
+    .upsert(true)
+    .return_document(db::ReturnDocument::After)
+    .build();
+
   let query = db::doc! { "oid": user.sub.clone() };
   let updates = mkplayer(&user);
 
