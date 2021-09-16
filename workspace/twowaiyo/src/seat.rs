@@ -4,7 +4,7 @@ use super::{
   roll::Roll,
 };
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 pub struct Seat {
   bets: Vec<Bet>,
   balance: u32,
@@ -49,6 +49,22 @@ impl Seat {
       balance,
       ..Self::default()
     }
+  }
+
+  pub fn stand(self) -> (u32, Option<Self>) {
+    let Seat { bets, balance } = self;
+    let start = (balance, Vec::with_capacity(bets.len()));
+    let (balance, bets) = bets.into_iter().fold(start, |(balance, bets), bet| {
+      let (amt, rem) = bet.pull();
+      let bets = bets.into_iter().chain(rem).collect();
+      (balance + amt, bets)
+    });
+
+    if bets.len() == 0 {
+      return (balance, None);
+    }
+
+    (balance, Some(Seat { bets, balance: 0 }))
   }
 
   pub fn roll(self, roll: &Roll) -> Self {
@@ -117,5 +133,36 @@ impl Seat {
 
       _ => Ok(bet.clone()),
     }
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use super::Seat;
+  use crate::bets::Bet;
+
+  #[test]
+  fn stand_with_nothing() {
+    let seat = Seat::with_balance(100);
+    assert_eq!(seat.stand(), (100u32, None::<Seat>));
+  }
+
+  #[test]
+  fn stand_with_pass_off() {
+    let seat = Seat::with_balance(100);
+    let seat = seat.bet(&Bet::start_pass(50)).expect("");
+    assert_eq!(seat.stand(), (100u32, None));
+  }
+
+  #[test]
+  fn stand_with_pass_on() {
+    let seat = Seat::with_balance(100);
+    let seat = seat.bet(&Bet::start_pass(50)).expect("");
+    let roll = vec![2u8, 4u8].into_iter().collect();
+    let seat = seat.roll(&roll);
+    let expected = Seat::with_balance(50)
+      .bet(&Bet::start_pass(50).result(&roll).remaining().unwrap())
+      .unwrap();
+    assert_eq!(seat.stand(), (50u32, Some(expected)));
   }
 }

@@ -43,6 +43,19 @@ pub struct RaceBet {
 }
 
 impl RaceBet {
+  pub fn pull(self) -> (u32, Option<Self>) {
+    match self.target {
+      Some(target) => (
+        0,
+        Some(RaceBet {
+          target: Some(target),
+          amount: self.amount,
+        }),
+      ),
+      None => (self.amount, None),
+    }
+  }
+
   pub fn result(&self, roll: &Roll) -> BetResult<Self> {
     let total = roll.total();
 
@@ -187,6 +200,26 @@ impl Bet {
     match self {
       Bet::Pass(race) => race.target,
       _ => None,
+    }
+  }
+
+  pub fn pull(self) -> (u32, Option<Self>) {
+    let weight = self.weight();
+
+    match self {
+      Bet::Come(race) => {
+        let (amount, rem) = race.pull();
+        (amount, rem.map(Bet::Come))
+      }
+      Bet::Pass(race) => {
+        let (amount, rem) = race.pull();
+        (amount, rem.map(Bet::Pass))
+      }
+      Bet::PassOdds(_, _) => (weight, None),
+      Bet::ComeOdds(_, _) => (weight, None),
+      Bet::Field(_) => (weight, None),
+      Bet::Place(_, _) => (weight, None),
+      Bet::Hardway(_, _) => (weight, None),
     }
   }
 
@@ -692,5 +725,53 @@ mod test {
     let bet = Bet::Place(100, 10);
     let roll = vec![2u8, 4u8].into_iter().collect::<Roll>();
     assert_eq!(bet.result(&roll), BetResult::Noop(Bet::Place(100, 10)));
+  }
+
+  #[test]
+  fn test_pull_pass_off() {
+    let bet = Bet::start_pass(100);
+    let (amt, rem) = bet.pull();
+    assert_eq!(amt, 100);
+    assert_eq!(rem, None);
+  }
+
+  #[test]
+  fn test_pull_pass_on() {
+    let bet = Bet::start_pass(100);
+    let roll = vec![2u8, 4u8].into_iter().collect::<Roll>();
+    let bet = bet.result(&roll).remaining().unwrap();
+    let (amt, rem) = bet.pull();
+    assert_eq!(amt, 0);
+    assert_eq!(
+      rem,
+      Some(Bet::Pass(RaceBet {
+        target: Some(6),
+        amount: 100
+      }))
+    );
+  }
+
+  #[test]
+  fn test_pull_come_off() {
+    let bet = Bet::start_come(100);
+    let (amt, rem) = bet.pull();
+    assert_eq!(amt, 100);
+    assert_eq!(rem, None);
+  }
+
+  #[test]
+  fn test_pull_come_on() {
+    let bet = Bet::start_come(100);
+    let roll = vec![2u8, 4u8].into_iter().collect::<Roll>();
+    let bet = bet.result(&roll).remaining().unwrap();
+    let (amt, rem) = bet.pull();
+    assert_eq!(amt, 0);
+    assert_eq!(
+      rem,
+      Some(Bet::Come(RaceBet {
+        target: Some(6),
+        amount: 100
+      }))
+    );
   }
 }

@@ -23,8 +23,13 @@ fn main() -> Result<()> {
     app.at("/auth/complete").get(stickbot::routes::auth::complete);
     app.at("/auth/identify").get(stickbot::routes::auth::identify);
 
+    app.at("/tables").get(stickbot::routes::tables::list);
+    app.at("/leave-table").get(stickbot::routes::tables::leave);
+
     app.at("/create-table").get(stickbot::routes::tables::create);
-    app.at("/drop-tables").get(stickbot::routes::tables::drop_all);
+
+    app.at("/admin/drop-tables").get(stickbot::routes::admin::drop_all);
+    app.at("/admin/set-balance").get(stickbot::routes::admin::set_balance);
 
     log::info!("application ready, spawning");
     app.listen(&addr).await?;

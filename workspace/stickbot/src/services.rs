@@ -23,7 +23,7 @@ impl Services {
     T: std::fmt::Display,
   {
     let claims = auth::Claims::decode(&token).ok()?;
-    let collection = self.collection::<bankah::Player, _>(constants::MONGO_DB_PLAYER_COLLECTION_NAME);
+    let collection = self.collection::<bankah::PlayerState, _>(constants::MONGO_DB_PLAYER_COLLECTION_NAME);
     log::info!("decoded claims '{:?}', fetching user", claims);
     collection
       .find_one(db::doc! { "oid": claims.oid.clone(), "id": claims.id.clone() }, None)

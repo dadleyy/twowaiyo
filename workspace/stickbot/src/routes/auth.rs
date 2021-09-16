@@ -152,7 +152,7 @@ pub async fn complete(request: Request) -> Result {
   // With our loaded user data, attempt to store a new record in our players collection.
   let collection = request
     .state()
-    .collection::<bankah::Player, _>(constants::MONGO_DB_PLAYER_COLLECTION_NAME);
+    .collection::<bankah::PlayerState, _>(constants::MONGO_DB_PLAYER_COLLECTION_NAME);
 
   let options = db::FindOneAndUpdateOptions::builder()
     .upsert(true)

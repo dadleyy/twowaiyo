@@ -92,6 +92,10 @@ impl Table {
     self.id.to_string()
   }
 
+  pub fn population(&self) -> usize {
+    self.seats.len()
+  }
+
   pub fn bet(self, player: &Player, bet: &Bet) -> Result<Self, errors::CarryError<Self>> {
     let valid = match (self.button, bet) {
       (Some(_), Bet::Pass(_)) => Err(errors::CarryError::new(self, errors::PASS_LINE_ALREADY_ON)),
@@ -103,6 +107,35 @@ impl Table {
     };
 
     valid.and_then(|table| apply_bet(table, player, bet))
+  }
+
+  pub fn stand(self, player: &mut Player) -> Self {
+    let Table {
+      id,
+      button,
+      rolls,
+      seats,
+    } = self;
+
+    let seats = seats
+      .into_iter()
+      .filter_map(|(key, value)| {
+        if key == player.id {
+          let (balance, seat) = value.stand();
+          player.balance += balance;
+          seat.map(|seat| (key, seat))
+        } else {
+          Some((key, value))
+        }
+      })
+      .collect();
+
+    Table {
+      id,
+      button,
+      rolls,
+      seats,
+    }
   }
 
   pub fn sit(self, player: &mut Player) -> Self {

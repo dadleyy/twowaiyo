@@ -51,7 +51,7 @@ impl Default for TableState {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Player {
+pub struct PlayerState {
   pub id: String,
   pub oid: String,
   pub nickname: String,
