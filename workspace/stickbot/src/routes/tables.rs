@@ -1,5 +1,5 @@
 use crate::constants::MONGO_DB_TABLE_COLLECTION_NAME;
-use crate::web::{Body, Error, Request, Response, Result};
+use crate::web::{cookie as get_cookie, Body, Error, Request, Response, Result};
 
 use bankah::TableState;
 use twowaiyo::Table;
@@ -23,6 +23,10 @@ pub async fn drop_all(request: Request) -> Result {
 }
 
 pub async fn create(request: Request) -> Result {
+  let cookie = get_cookie(&request).ok_or(Error::from_str(404, ""))?;
+  let user = format!("{}", cookie).to_string();
+  log::info!("creating table for user {:?}", user);
+
   let collection = request.state().collection(MONGO_DB_TABLE_COLLECTION_NAME);
   let table = Table::default();
 

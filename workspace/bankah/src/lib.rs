@@ -49,3 +49,11 @@ impl Default for TableState {
     }
   }
 }
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Player {
+  pub id: String,
+  pub oid: String,
+  pub nickname: String,
+  pub balance: u32,
+}

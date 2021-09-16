@@ -3,7 +3,9 @@ pub const STICKBOT_HTTP_ADDR_ENV: &'static str = "STICKBOT_HTTP_ADDR";
 
 pub const MONGO_DB_DATABASE_NAME: &'static str = "stickbot";
 pub const MONGO_DB_APP_NAME: &'static str = "twowaiyo:stickbot";
+
 pub const MONGO_DB_TABLE_COLLECTION_NAME: &'static str = "stickbot.tables";
+pub const MONGO_DB_PLAYER_COLLECTION_NAME: &'static str = "stickbot.players";
 
 pub const AUTH_O_AUTH_URI_ENV: &'static str = "STICKBOT_AUTH_0_AUTH_URI";
 pub const AUTH_O_TOKEN_URI_ENV: &'static str = "STICKBOT_AUTH_0_TOKEN_URI";
@@ -14,3 +16,5 @@ pub const AUTH_O_CLIENT_SECRET_ENV: &'static str = "STICKBOT_AUTH_0_CLIENT_SECRE
 pub const AUTH_O_REDIRECT_URI_ENV: &'static str = "STICKBOT_AUTH_0_REDIRECT_URI";
 
 pub const STICKBOT_COOKIE_NAME: &'static str = "stickbot_session";
+
+pub const STICKBOT_JWT_SECRET_ENV: &'static str = "STICKBOT_JWT_SECRET";

@@ -1,9 +1,37 @@
 use serde::{Deserialize, Serialize};
 use surf;
 
-use crate::auth::from_token as load_user_info;
+use crate::auth;
 use crate::constants;
-use crate::web::{Body, Cookie, Error, Redirect, Request, Response, Result, Url};
+use crate::db;
+use crate::web::{cookie as get_cookie, Body, Error, Redirect, Request, Response, Result, Url};
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct UserInfo {
+  pub sub: String,
+  pub nickname: String,
+  pub picture: String,
+}
+
+pub async fn fetch_user<T>(token: T) -> Option<UserInfo>
+where
+  T: std::fmt::Display,
+{
+  let uri = std::env::var(constants::AUTH_O_USERINFO_URI_ENV).unwrap_or_default();
+
+  let mut res = surf::get(&uri)
+    .header("Authorization", format!("Bearer {}", token))
+    .await
+    .ok()?;
+
+  if res.status() != surf::StatusCode::Ok {
+    log::warn!("bad response status - '{:?}'", res.status());
+    return None;
+  }
+
+  log::debug!("loaded info with status '{}', attempting to parse", res.status());
+  res.body_json::<UserInfo>().await.ok()
+}
 
 #[derive(Debug, Serialize)]
 struct AuthCodeRequest {
@@ -59,56 +87,104 @@ async fn token_from_response(response: &mut surf::Response) -> Option<String> {
     .map(|body| body.access_token)
 }
 
+// Return our persisted player information from the token provided in our cookie.
 pub async fn identify(request: Request) -> Result {
-  let cookie = request
-    .header("Cookie")
-    .and_then(|list| list.get(0))
-    .map(|value| value.to_string())
-    .and_then(|cook| Cookie::parse(cook).ok())
-    .ok_or(Error::from_str(404, ""))?;
-
-  log::info!("found cookie header, loading user info");
-
-  load_user_info(cookie.value())
+  let cookie = get_cookie(&request).ok_or(Error::from_str(404, "no-session"))?;
+  let authority = request
+    .state()
+    .authority(cookie.value())
     .await
-    .and_then(|parsed| Body::from_json(&parsed).ok())
+    .ok_or(Error::from_str(404, "no-user"))?
+    .player()
+    .ok_or(Error::from_str(404, "no-player"))?;
+
+  log::info!("loaded authority - {:?}", authority);
+
+  Body::from_json(&authority)
     .map(|body| Response::builder(200).body(body).build())
-    .ok_or(Error::from_str(404, ""))
+    .map_err(|error| {
+      log::warn!("unable to serialize player authority - {}", error);
+      Error::from_str(500, "")
+    })
 }
 
+fn mkplayer(userinfo: &UserInfo) -> db::bson::Document {
+  let id = uuid::Uuid::new_v4();
+  db::doc! {
+    "$setOnInsert": {
+      "id": id.to_string(),
+      "oid": userinfo.sub.clone(),
+      "nickname": userinfo.nickname.clone(),
+      "balance": 10000,
+    }
+  }
+}
+
+// Complete the oAuth authentication. Here we are receiving a code sent from our oAuth provider in the url and
+// exchanging that for an authentication token. Assuming that goes well, we will either create or update the player
+// record in our data store.
 pub async fn complete(request: Request) -> Result {
   log::info!("completing auth flow");
+
   let code = request
     .url()
     .query_pairs()
     .find_map(|(k, v)| if k == "code" { Some(v) } else { None })
-    .ok_or(Error::from_str(404, ""))?;
+    .ok_or(Error::from_str(404, "no-code"))?;
 
+  // Attempt top exchange our code with the oAuth provider for a token.
   let payload = AuthCodeRequest {
     code: code.into(),
     ..AuthCodeRequest::default()
   };
-
   let destination = std::env::var(constants::AUTH_O_TOKEN_URI_ENV).unwrap_or_default();
-
   log::info!("exchanging code - {} (at {})", payload.code, destination);
   let mut response = surf::post(&destination).body_json(&payload)?.await?;
-  let token = token_from_response(&mut response).await;
+  let token = token_from_response(&mut response)
+    .await
+    .ok_or(Error::from_str(404, "token-exchange"))?;
 
-  token.map_or(Ok(Redirect::temporary("/heartbeat").into()), |token| {
-    log::info!("created token, sending to cookie storage");
-    let cookie = format!("{}={}; {}", constants::STICKBOT_COOKIE_NAME, token, COOKIE_FLAGS);
+  // With our token, attempt to load the user info.
+  log::info!("created token, loading user info");
+  let user = fetch_user(&token).await.ok_or(Error::from_str(404, ""))?;
+  log::info!("user loaded - '{:?}', finding or creating record", user);
 
-    // TODO - determine where to send the user.
-    let response = Response::builder(302)
-      .header("Set-Cookie", cookie)
-      .header("Location", "/auth/identify")
-      .build();
+  // With our loaded user data, attempt to store a new record in our players collection.
+  let collection = request
+    .state()
+    .collection::<bankah::Player, _>(constants::MONGO_DB_PLAYER_COLLECTION_NAME);
 
-    Ok(response)
-  })
+  let options = db::FindOneAndUpdateOptions::builder().upsert(true).build();
+  let query = db::doc! { "oid": user.sub.clone() };
+  let updates = mkplayer(&user);
+
+  let player = collection
+    .find_one_and_update(query, updates, options)
+    .await
+    .map_err(|error| {
+      log::warn!("unable to create new player - {:?}", error);
+      Error::from_str(500, "player-failure")
+    })?
+    .ok_or(Error::from_str(404, "missing-player"))?;
+
+  log::info!("found record - {:?}, building token", player);
+
+  let jwt = auth::Claims::for_player(&user.sub, &player.id).encode()?;
+
+  // With our player created, we're ready to store the token in our session and move along.
+  let cookie = format!("{}={}; {}", constants::STICKBOT_COOKIE_NAME, jwt, COOKIE_FLAGS);
+
+  // TODO - determine where to send the user. Once the web UI is created, we will send the user to some login page
+  // where an attempt will be made to fetch identity information using the newly-set cookie.
+  let response = Response::builder(302)
+    .header("Set-Cookie", cookie)
+    .header("Location", "/auth/identify")
+    .build();
+
+  Ok(response)
 }
 
+// Start the oAuth authentication flow. This is a straightforward redirect to the oAuth provider to queue a log in.
 pub async fn start(_: Request) -> Result {
   let client_id = std::env::var(constants::AUTH_O_CLIENT_ID_ENV).ok();
   let auth_uri = std::env::var(constants::AUTH_O_AUTH_URI_ENV).ok();
