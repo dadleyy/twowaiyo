@@ -15,11 +15,11 @@ pub struct Table {
   rolls: Vec<Roll>,
 }
 
-impl From<bankah::TableState> for Table {
-  fn from(state: bankah::TableState) -> Self {
+impl From<&bankah::TableState> for Table {
+  fn from(state: &bankah::TableState) -> Self {
     let rolls = state
       .rolls
-      .into_iter()
+      .iter()
       .map(|tupe| IntoIterator::into_iter([tupe.0, tupe.1]).collect())
       .collect();
 

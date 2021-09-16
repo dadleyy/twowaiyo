@@ -42,6 +42,73 @@ pub async fn list(request: Request) -> Result {
   Ok(Response::builder(200).body(body).build())
 }
 
+#[derive(Debug, Deserialize)]
+struct TableJoinQuery {
+  pub table: String,
+}
+
+// Joins a table.
+pub async fn join(request: Request) -> Result {
+  let query = request.query::<TableJoinQuery>()?;
+  let cookie = get_cookie(&request).ok_or(Error::from_str(404, ""))?;
+  let mut player = request
+    .state()
+    .authority(cookie.value())
+    .await
+    .and_then(|auth| auth.player())
+    .map(|player| twowaiyo::Player::from(&player))
+    .ok_or(Error::from_str(404, "no-player"))?;
+
+  let tables = request
+    .state()
+    .collection::<bankah::TableState, _>(MONGO_DB_TABLE_COLLECTION_NAME);
+  let players = request
+    .state()
+    .collection::<bankah::TableState, _>(MONGO_DB_PLAYER_COLLECTION_NAME);
+
+  let state = tables
+    .find_one(doc! { "id": query.table }, None)
+    .await
+    .map_err(|error| {
+      log::warn!("unable to find table - {}", error);
+      Error::from_str(500, "lookup")
+    })?
+    .map(|state| twowaiyo::Table::from(&state))
+    .ok_or(Error::from_str(404, "no-table"))?;
+
+  let table = state.sit(&mut player);
+
+  let opts = FindOneAndUpdateOptions::builder()
+    .return_document(ReturnDocument::After)
+    .build();
+
+  match players
+    .find_one_and_update(
+      doc! { "id": player.id.to_string() },
+      doc! { "$set": { "balance": player.balance } },
+      opts,
+    )
+    .await
+  {
+    Err(error) => log::warn!("unable to update player balance after join - {}", error),
+    Ok(None) => log::warn!("no player to update"),
+    Ok(Some(_)) => log::info!("player balance updated"),
+  }
+
+  let replacement = bankah::TableState::from(&table);
+  tables
+    .replace_one(doc! { "id": table.identifier() }, &replacement, None)
+    .await
+    .map_err(|error| {
+      log::warn!("unable to create new table - {:?}", error);
+      Error::from_str(422, "failed")
+    })
+    .and_then(|_r| {
+      log::info!("player joined table '{}'", table.identifier());
+      Body::from_json(&replacement).map(|body| Response::builder(200).body(body).build())
+    })
+}
+
 // Creates a new table and sits the player.
 pub async fn create(request: Request) -> Result {
   let cookie = get_cookie(&request).ok_or(Error::from_str(404, ""))?;
@@ -60,6 +127,7 @@ pub async fn create(request: Request) -> Result {
     .state()
     .collection::<bankah::PlayerState, _>(MONGO_DB_PLAYER_COLLECTION_NAME);
   let table = Table::default().sit(&mut player);
+
   let opts = FindOneAndUpdateOptions::builder()
     .return_document(ReturnDocument::After)
     .build();
@@ -72,7 +140,7 @@ pub async fn create(request: Request) -> Result {
     )
     .await
   {
-    Err(error) => log::warn!("unable to update player balance - {}", error),
+    Err(error) => log::warn!("unable to update player balance after create - {}", error),
     Ok(None) => log::warn!("no player to update"),
     Ok(Some(_)) => log::info!("player balance updated"),
   }
@@ -120,16 +188,16 @@ pub async fn leave(request: Request) -> Result {
     .state()
     .collection::<bankah::PlayerState, _>(MONGO_DB_PLAYER_COLLECTION_NAME);
 
-  let state = tables
+  let table = tables
     .find_one(doc! { "id": query.table.as_str() }, None)
     .await
     .map_err(|error| {
       log::warn!("unable to find table - {}", error);
       error
     })?
+    .map(|state| twowaiyo::Table::from(&state))
     .ok_or(Error::from_str(404, "table-missing"))?;
 
-  let table: twowaiyo::Table = state.into();
   let mut seated = twowaiyo::Player::from(&player);
   let table = table.stand(&mut seated);
 
