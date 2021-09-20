@@ -30,3 +30,4 @@ http-types = { version = "^2.0" }
 surf = { version = "^2.3.0" }
 uuid = { version = "^0.8", features = ["v4"] }
 jsonwebtoken = { version = "^7.2.0" }
+kramer = { version = "^1.1.0", features = ["kramer-async"] }

@@ -1246,6 +1246,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kramer"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a868b230de482673303a4dd1a35fc58eebd3d1e70369d1c0f08aa77af5417914"
+dependencies = [
+ "async-std",
+]
+
+[[package]]
 name = "kv-log-macro"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2199,6 +2208,7 @@ dependencies = [
  "env_logger",
  "http-types",
  "jsonwebtoken",
+ "kramer",
  "log",
  "mongodb",
  "serde",
