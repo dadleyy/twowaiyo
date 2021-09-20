@@ -57,3 +57,37 @@ pub struct PlayerState {
   pub nickname: String,
   pub balance: u32,
 }
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct BetJob {
+  pub bet: BetState,
+  pub player: String,
+  pub table: String,
+  pub version: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub enum TableJob {
+  Bet((String, BetJob)),
+}
+
+impl TableJob {
+  pub fn id(&self) -> String {
+    match self {
+      TableJob::Bet((id, _)) => id.clone(),
+    }
+  }
+
+  pub fn bet(state: BetState, player: String, table: String, version: String) -> Self {
+    let id = uuid::Uuid::new_v4().to_string();
+    TableJob::Bet((
+      id,
+      BetJob {
+        bet: state,
+        player,
+        table,
+        version,
+      },
+    ))
+  }
+}

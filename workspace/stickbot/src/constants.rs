@@ -23,3 +23,5 @@ pub const STICKBOT_ONCORE_URL_ENV: &'static str = "STICKBOT_ONCORE_AUTH_URL";
 pub const REDIS_HOSTNAME_ENV: &'static str = "STICKBOT_REDIS_HOSTNAME";
 pub const REDIS_PORT_ENV: &'static str = "STICKBOT_REDIS_PORT";
 pub const REDIS_PASSWORD_ENV: &'static str = "STICKBOT_REDIS_PASSWORD";
+
+pub const STICKBOT_BETS_QUEUE: &'static str = "stickbot:bets";

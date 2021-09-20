@@ -23,6 +23,8 @@ twowaiyo = { path =  "../twowaiyo" }
 bankah = { path =  "../bankah" }
 async-std = { version = "^1.5.0" }
 mongodb = { version = "^2.0.0", features = ["async-std-runtime"], default-features = false }
+bson = { version = "^2.0.0" }
+serde_json = { version = "1.0" }
 tide = { version = "^0.16.0" }
 serde = { version = "^1.0", features = ["derive"] }
 chrono = { version = "^0.4", features = ["serde"] }

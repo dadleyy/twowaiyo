@@ -2203,6 +2203,7 @@ version = "0.1.0"
 dependencies = [
  "async-std",
  "bankah",
+ "bson",
  "chrono",
  "dotenv",
  "env_logger",
@@ -2212,6 +2213,7 @@ dependencies = [
  "log",
  "mongodb",
  "serde",
+ "serde_json",
  "surf",
  "tide",
  "twowaiyo",

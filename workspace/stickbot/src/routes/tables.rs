@@ -10,7 +10,7 @@ use twowaiyo::Table;
 
 // List tables.
 pub async fn list(request: Request) -> Result {
-  let cookie = get_cookie(&request).ok_or(Error::from_str(404, ""))?;
+  let cookie = get_cookie(&request).ok_or(Error::from_str(404, "no-cook"))?;
   let player = request
     .state()
     .authority(cookie.value())
