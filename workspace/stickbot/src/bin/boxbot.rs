@@ -1,4 +1,4 @@
-use std::io::Result;
+use std::io::{Error, ErrorKind, Result};
 use std::time::Duration;
 
 use stickbot;
@@ -10,46 +10,65 @@ const POP_CMD: kramer::Command<&'static str, &'static str> =
     Some((None, 3)),
   ));
 
+fn parse_pop(response: &kramer::ResponseValue) -> Option<bankah::TableJob> {
+  if let kramer::ResponseValue::String(inner) = response {
+    let deserialized = serde_json::from_str::<bankah::TableJob>(&inner);
+    return deserialized.ok();
+  }
+
+  None
+}
+
+async fn work(services: &stickbot::Services) -> Result<()> {
+  let result = match services.command(&POP_CMD).await {
+    Err(error) => {
+      log::warn!("unable to pop from bet queue - {}", error);
+      return Err(Error::new(ErrorKind::Other, format!("{}", error)));
+    }
+    Ok(kramer::Response::Item(kramer::ResponseValue::Empty)) => {
+      log::debug!("nothing to pop off, sleeping and moving on");
+      return Ok(());
+    }
+    Ok(kramer::Response::Array(values)) => values,
+    Ok(kramer::Response::Error) => {
+      log::warn!("unable to pop from queue - redis error");
+      return Err(Error::new(ErrorKind::Other, "unkown-error"));
+    }
+    Ok(kramer::Response::Item(inner)) => {
+      log::warn!("unknown response from pop - '{:?}'", inner);
+      return Err(Error::new(ErrorKind::Other, format!("{:?}", inner)));
+    }
+  };
+
+  log::debug!("result from pop - {:?}, attempting to deserialize", result);
+
+  let job = result
+    .get(1)
+    .and_then(parse_pop)
+    .ok_or(Error::new(ErrorKind::Other, "unrecognized-pop"))?;
+
+  log::debug!("result from deserialize - {:?}", job);
+
+  let (id, result) = match job {
+    bankah::TableJob::Bet((id, bet)) => (id, stickbot::processors::bet(&services, &bet).await),
+  };
+
+  match result {
+    Ok(_) => log::info!("job '{}' processed", id),
+    Err(error) => log::warn!("unable to process job - {}", error),
+  }
+
+  Ok(())
+}
+
 async fn run(services: stickbot::Services) -> Result<()> {
   log::debug!("entering processing loop");
 
   loop {
-    let result = match services.command(&POP_CMD).await {
-      Err(error) => {
-        log::warn!("unable to pop from bet queue - {}", error);
-        continue;
-      }
-      Ok(kramer::Response::Item(kramer::ResponseValue::Empty)) => {
-        log::debug!("nothing to pop off, sleeping and moving on");
-        async_std::task::sleep(Duration::from_secs(2)).await;
-        continue;
-      }
-      Ok(kramer::Response::Array(values)) => values,
-      Ok(kramer::Response::Error) => {
-        log::warn!("unable to pop from queue - redis error");
-        async_std::task::sleep(Duration::from_secs(2)).await;
-        continue;
-      }
-      Ok(kramer::Response::Item(inner)) => {
-        log::warn!("unknown response from pop - '{:?}'", inner);
-        continue;
-      }
-    };
-
-    log::debug!("result from pop - {:?}, attempting to deserialize", result);
-
-    let serialized = match result.get(1) {
-      Some(kramer::ResponseValue::String(value)) => value,
-      other => {
-        log::warn!("strange response entry - {:?}", other);
-        continue;
-      }
-    };
-
-    let deserialized = serde_json::from_str::<bankah::TableJob>(&serialized);
-    log::debug!("result from deserialize - {:?}", deserialized);
+    if let Err(error) = work(&services).await {
+      log::warn!("unable to process - {}", error);
+    }
     async_std::task::sleep(Duration::from_secs(10)).await;
-    log::debug!("polling bet queue");
   }
 }
 
