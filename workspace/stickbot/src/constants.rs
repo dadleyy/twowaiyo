@@ -25,3 +25,4 @@ pub const REDIS_PORT_ENV: &'static str = "STICKBOT_REDIS_PORT";
 pub const REDIS_PASSWORD_ENV: &'static str = "STICKBOT_REDIS_PASSWORD";
 
 pub const STICKBOT_BETS_QUEUE: &'static str = "stickbot:bets";
+pub const STICKBOT_BET_RESULTS: &'static str = "stickbot:bet_results";

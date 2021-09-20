@@ -58,7 +58,13 @@ async fn work(services: &stickbot::Services) -> Result<()> {
     Err(error) => log::warn!("unable to process job - {}", error),
   }
 
-  Ok(())
+  let sets = kramer::Command::Hashes(kramer::HashCommand::Set(
+    stickbot::constants::STICKBOT_BET_RESULTS,
+    kramer::Arity::One((&id, "done")),
+    kramer::Insertion::Always,
+  ));
+
+  services.command(&sets).await.map(|_| ())
 }
 
 async fn run(services: stickbot::Services) -> Result<()> {
