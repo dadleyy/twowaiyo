@@ -85,10 +85,11 @@ pub async fn join(mut request: Request) -> Result {
       log::warn!("unable to find table - {}", error);
       Error::from_str(500, "lookup")
     })?
-    .map(|state| twowaiyo::Table::from(&state))
     .ok_or(Error::from_str(404, "no-table"))?;
 
-  let table = state.sit(&mut player);
+  // Apply business logic
+  let table = twowaiyo::Table::from(&state);
+  let table = table.sit(&mut player);
 
   let opts = FindOneAndUpdateOptions::builder()
     .return_document(ReturnDocument::After)
@@ -107,7 +108,10 @@ pub async fn join(mut request: Request) -> Result {
     Ok(Some(_)) => log::info!("player balance updated"),
   }
 
-  let replacement = bankah::TableState::from(&table);
+  // Make sure to keep our `nonce` the same - joining doesn't affect version.
+  let mut replacement = bankah::TableState::from(&table);
+  replacement.nonce = state.nonce;
+
   tables
     .replace_one(doc! { "id": table.identifier() }, &replacement, None)
     .await
@@ -171,6 +175,7 @@ pub async fn create(request: Request) -> Result {
     })
 }
 
+// Leave table.
 pub async fn leave(mut request: Request) -> Result {
   let query = request.body_json::<TableActionPayload>().await.map_err(|error| {
     log::warn!("unable to parse leave payload - {}", error);
@@ -196,21 +201,24 @@ pub async fn leave(mut request: Request) -> Result {
     .state()
     .collection::<bankah::PlayerState, _>(MONGO_DB_PLAYER_COLLECTION_NAME);
 
-  let table = tables
+  let state = tables
     .find_one(doc! { "id": query.id.as_str() }, None)
     .await
     .map_err(|error| {
       log::warn!("unable to find table - {}", error);
       error
     })?
-    .map(|state| twowaiyo::Table::from(&state))
     .ok_or(Error::from_str(404, "table-missing"))?;
 
+  let table = twowaiyo::Table::from(&state);
   let mut seated = twowaiyo::Player::from(&player);
   let table = table.stand(&mut seated);
 
   log::debug!("{:?} (population {})", table, table.population());
-  let updated = bankah::TableState::from(&table);
+
+  // Do not update nonce, leaving doesnt change state.
+  let mut updated = bankah::TableState::from(&table);
+  updated.nonce = state.nonce;
 
   tables
     .replace_one(doc! { "id": query.id.as_str() }, &updated, None)
