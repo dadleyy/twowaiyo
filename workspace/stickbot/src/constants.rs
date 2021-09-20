@@ -18,3 +18,4 @@ pub const AUTH_O_REDIRECT_URI_ENV: &'static str = "STICKBOT_AUTH_0_REDIRECT_URI"
 pub const STICKBOT_COOKIE_NAME: &'static str = "stickbot_session";
 
 pub const STICKBOT_JWT_SECRET_ENV: &'static str = "STICKBOT_JWT_SECRET";
+pub const STICKBOT_ONCORE_URL_ENV: &'static str = "STICKBOT_ONCORE_AUTH_URL";

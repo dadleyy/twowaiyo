@@ -43,13 +43,17 @@ pub async fn list(request: Request) -> Result {
 }
 
 #[derive(Debug, Deserialize)]
-struct TableJoinQuery {
-  pub table: String,
+struct TableActionPayload {
+  pub id: String,
 }
 
 // Joins a table.
-pub async fn join(request: Request) -> Result {
-  let query = request.query::<TableJoinQuery>()?;
+pub async fn join(mut request: Request) -> Result {
+  let query = request.body_json::<TableActionPayload>().await.map_err(|error| {
+    log::warn!("unable to parse join-table payload - {}", error);
+    error
+  })?;
+
   let cookie = get_cookie(&request).ok_or(Error::from_str(404, ""))?;
   let mut player = request
     .state()
@@ -59,6 +63,14 @@ pub async fn join(request: Request) -> Result {
     .map(|player| twowaiyo::Player::from(&player))
     .ok_or(Error::from_str(404, "no-player"))?;
 
+  if player.balance == 0 {
+    return Ok(
+      Response::builder(422)
+        .body(Body::from_string("no-balance".into()))
+        .build(),
+    );
+  }
+
   let tables = request
     .state()
     .collection::<bankah::TableState, _>(MONGO_DB_TABLE_COLLECTION_NAME);
@@ -67,7 +79,7 @@ pub async fn join(request: Request) -> Result {
     .collection::<bankah::TableState, _>(MONGO_DB_PLAYER_COLLECTION_NAME);
 
   let state = tables
-    .find_one(doc! { "id": query.table }, None)
+    .find_one(doc! { "id": query.id }, None)
     .await
     .map_err(|error| {
       log::warn!("unable to find table - {}", error);
@@ -159,16 +171,12 @@ pub async fn create(request: Request) -> Result {
     })
 }
 
-#[derive(Deserialize)]
-struct TableQueryParams {
-  pub table: String,
-}
+pub async fn leave(mut request: Request) -> Result {
+  let query = request.body_json::<TableActionPayload>().await.map_err(|error| {
+    log::warn!("unable to parse leave payload - {}", error);
+    error
+  })?;
 
-pub async fn leave(request: Request) -> Result {
-  let query = request
-    .query::<TableQueryParams>()
-    .ok()
-    .ok_or(Error::from_str(404, "no-table"))?;
   let cookie = get_cookie(&request).ok_or(Error::from_str(404, "unauth"))?;
 
   let player = request
@@ -179,7 +187,7 @@ pub async fn leave(request: Request) -> Result {
     .player()
     .ok_or(Error::from_str(404, "no-player"))?;
 
-  log::info!("user '{}' attempting to leave table '{}'", player.id, query.table);
+  log::info!("user '{}' attempting to leave table '{}'", player.id, query.id);
 
   let tables = request
     .state()
@@ -189,7 +197,7 @@ pub async fn leave(request: Request) -> Result {
     .collection::<bankah::PlayerState, _>(MONGO_DB_PLAYER_COLLECTION_NAME);
 
   let table = tables
-    .find_one(doc! { "id": query.table.as_str() }, None)
+    .find_one(doc! { "id": query.id.as_str() }, None)
     .await
     .map_err(|error| {
       log::warn!("unable to find table - {}", error);
@@ -202,13 +210,10 @@ pub async fn leave(request: Request) -> Result {
   let table = table.stand(&mut seated);
 
   log::debug!("{:?} (population {})", table, table.population());
+  let updated = bankah::TableState::from(&table);
 
   tables
-    .replace_one(
-      doc! { "id": query.table.as_str() },
-      bankah::TableState::from(&table),
-      None,
-    )
+    .replace_one(doc! { "id": query.id.as_str() }, &updated, None)
     .await
     .map_err(|error| {
       log::warn!("unable to persist table updates - {}", error);
@@ -231,5 +236,5 @@ pub async fn leave(request: Request) -> Result {
 
   log::info!("finished leaving");
 
-  Ok(format!("").into())
+  Body::from_json(&updated).map(|body| Response::builder(200).body(body).build())
 }

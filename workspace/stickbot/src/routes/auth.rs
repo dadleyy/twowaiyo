@@ -178,11 +178,15 @@ pub async fn complete(request: Request) -> Result {
   // With our player created, we're ready to store the token in our session and move along.
   let cookie = format!("{}={}; {}", constants::STICKBOT_COOKIE_NAME, jwt, COOKIE_FLAGS);
 
+  let destination = std::env::var(constants::STICKBOT_ONCORE_URL_ENV)
+    .ok()
+    .unwrap_or("/auth/identify".into());
+
   // TODO - determine where to send the user. Once the web UI is created, we will send the user to some login page
   // where an attempt will be made to fetch identity information using the newly-set cookie.
   let response = Response::builder(302)
     .header("Set-Cookie", cookie)
-    .header("Location", "/auth/identify")
+    .header("Location", destination.as_str())
     .build();
 
   Ok(response)
