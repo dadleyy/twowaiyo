@@ -68,7 +68,7 @@ impl From<&Table> for bankah::TableState {
 
 impl Default for Table {
   fn default() -> Self {
-    let rolls = Vec::with_capacity(2);
+    let rolls = Vec::with_capacity(crate::constants::MAX_ROLL_HISTORY);
     let id = uuid::Uuid::new_v4();
     let seats = HashMap::with_capacity(100);
     Table {
@@ -194,7 +194,7 @@ impl Table {
     let rolls = Some(roll)
       .into_iter()
       .chain(self.rolls.into_iter())
-      .take(2)
+      .take(crate::constants::MAX_ROLL_HISTORY)
       .collect::<Vec<Roll>>();
 
     Table {

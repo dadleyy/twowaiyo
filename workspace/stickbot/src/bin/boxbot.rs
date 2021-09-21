@@ -55,6 +55,10 @@ async fn work(services: &stickbot::Services) -> Result<()> {
 
   let (id, result) = match &job {
     bankah::TableJob::Bet(inner) => (inner.id.clone(), stickbot::processors::bet(&services, &inner.job).await),
+    bankah::TableJob::Roll(inner) => (
+      inner.id.clone(),
+      stickbot::processors::roll(&services, &inner.job).await,
+    ),
   };
 
   // Processors will return a Result<E, T>, where `E` can either represent a "fatal" error that is non-retryable or
@@ -100,7 +104,7 @@ async fn run(services: stickbot::Services) -> Result<()> {
       log::warn!("unable to process - {}", error);
     }
 
-    async_std::task::sleep(Duration::from_secs(10)).await;
+    async_std::task::sleep(Duration::from_secs(2)).await;
   }
 }
 

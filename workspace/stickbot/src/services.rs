@@ -1,4 +1,4 @@
-use std::io::Result;
+use std::io::{Error, ErrorKind, Result};
 
 use async_std::net::TcpStream;
 use async_std::sync::Arc;
@@ -21,6 +21,29 @@ impl Services {
   {
     let db = self.db.database(constants::MONGO_DB_DATABASE_NAME);
     db.collection::<T>(name.as_ref())
+  }
+
+  pub fn tables(&self) -> db::Collection<bankah::TableState> {
+    self.collection(constants::MONGO_DB_TABLE_COLLECTION_NAME)
+  }
+
+  pub fn players(&self) -> db::Collection<bankah::PlayerState> {
+    self.collection(constants::MONGO_DB_PLAYER_COLLECTION_NAME)
+  }
+
+  pub async fn queue(&self, job: &bankah::TableJob) -> Result<String> {
+    let serialized = serde_json::to_string(&job).map_err(|error| {
+      log::warn!("unable to serialize job - {}", error);
+      Error::new(ErrorKind::Other, format!("{}", error))
+    })?;
+
+    let command = kramer::Command::List(kramer::ListCommand::Push(
+      (kramer::Side::Right, kramer::Insertion::Always),
+      constants::STICKBOT_BETS_QUEUE,
+      kramer::Arity::One(serialized),
+    ));
+
+    self.command(&command).await.map(|_| job.id())
   }
 
   pub async fn authority<T>(&self, token: T) -> Option<auth::Authority>

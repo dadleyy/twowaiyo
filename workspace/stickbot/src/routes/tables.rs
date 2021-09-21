@@ -1,7 +1,6 @@
 use async_std::stream::StreamExt;
 use serde::Deserialize;
 
-use crate::constants::{MONGO_DB_PLAYER_COLLECTION_NAME, MONGO_DB_TABLE_COLLECTION_NAME};
 use crate::db::{doc, FindOneAndUpdateOptions, ReturnDocument};
 use crate::web::{cookie as get_cookie, Body, Error, Request, Response, Result};
 
@@ -19,9 +18,7 @@ pub async fn list(request: Request) -> Result {
     .ok_or(Error::from_str(404, ""))?;
 
   log::info!("listing tables for '{:?}'", player);
-  let collection = request
-    .state()
-    .collection::<TableState, _>(MONGO_DB_TABLE_COLLECTION_NAME);
+  let collection = request.state().tables();
 
   let mut tables = collection.find(None, None).await.map_err(|error| {
     log::warn!("unable to query tables - {}", error);
@@ -71,12 +68,8 @@ pub async fn join(mut request: Request) -> Result {
     );
   }
 
-  let tables = request
-    .state()
-    .collection::<bankah::TableState, _>(MONGO_DB_TABLE_COLLECTION_NAME);
-  let players = request
-    .state()
-    .collection::<bankah::TableState, _>(MONGO_DB_PLAYER_COLLECTION_NAME);
+  let tables = request.state().tables();
+  let players = request.state().players();
 
   let state = tables
     .find_one(doc! { "id": query.id }, None)
@@ -138,10 +131,9 @@ pub async fn create(request: Request) -> Result {
 
   log::info!("creating table for user {:?}", player.id);
 
-  let tables = request.state().collection(MONGO_DB_TABLE_COLLECTION_NAME);
-  let players = request
-    .state()
-    .collection::<bankah::PlayerState, _>(MONGO_DB_PLAYER_COLLECTION_NAME);
+  let tables = request.state().tables();
+  let players = request.state().players();
+
   let table = Table::default().sit(&mut player);
 
   let opts = FindOneAndUpdateOptions::builder()
@@ -161,8 +153,13 @@ pub async fn create(request: Request) -> Result {
     Ok(Some(_)) => log::info!("player balance updated"),
   }
 
+  let state = TableState {
+    nonce: uuid::Uuid::new_v4().to_string(),
+    ..TableState::from(&table)
+  };
+
   tables
-    .insert_one(TableState::from(&table), None)
+    .insert_one(&state, None)
     .await
     .map_err(|error| {
       log::warn!("unable to create new table - {:?}", error);
@@ -194,12 +191,8 @@ pub async fn leave(mut request: Request) -> Result {
 
   log::info!("user '{}' attempting to leave table '{}'", player.id, query.id);
 
-  let tables = request
-    .state()
-    .collection::<bankah::TableState, _>(MONGO_DB_TABLE_COLLECTION_NAME);
-  let players = request
-    .state()
-    .collection::<bankah::PlayerState, _>(MONGO_DB_PLAYER_COLLECTION_NAME);
+  let tables = request.state().tables();
+  let players = request.state().players();
 
   let state = tables
     .find_one(doc! { "id": query.id.as_str() }, None)

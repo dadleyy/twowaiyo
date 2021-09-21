@@ -69,6 +69,12 @@ pub struct BetJob {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RollJob {
+  pub table: String,
+  pub version: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JobWapper<T> {
   pub job: T,
   pub id: String,
@@ -78,12 +84,14 @@ pub struct JobWapper<T> {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum TableJob {
   Bet(JobWapper<BetJob>),
+  Roll(JobWapper<RollJob>),
 }
 
 impl TableJob {
   pub fn id(&self) -> String {
     match self {
       TableJob::Bet(inner) => inner.id.clone(),
+      TableJob::Roll(inner) => inner.id.clone(),
     }
   }
 
@@ -93,7 +101,14 @@ impl TableJob {
         attempts: inner.attempts + 1,
         ..inner.clone()
       })),
+      _ => None,
     }
+  }
+
+  pub fn roll(table: String, version: String) -> Self {
+    let id = uuid::Uuid::new_v4().to_string();
+    let job = RollJob { table, version };
+    TableJob::Roll(JobWapper { job, id, attempts: 0 })
   }
 
   pub fn bet(state: BetState, player: String, table: String, version: String) -> Self {
@@ -111,6 +126,7 @@ impl TableJob {
 #[derive(Debug, Serialize)]
 pub enum BetFailureReason {
   InsufficientFunds,
+  InvalidComeBet,
   MissingComeForOdds,
   MissingPassForOdds,
   Other,
@@ -121,6 +137,8 @@ pub enum TableJobOutput {
   BetProcessed,
   BetStale,
   BetFailed(BetFailureReason),
+  RollProcessed,
+  RollStale,
 }
 
 #[derive(Debug, Serialize)]
