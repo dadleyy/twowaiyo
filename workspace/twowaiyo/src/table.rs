@@ -30,13 +30,17 @@ impl From<&bankah::TableState> for Table {
       .map(|(key, state)| (uuid::Uuid::parse_str(&key).unwrap_or_default(), state.into()))
       .collect();
 
+    let roller = state
+      .roller
+      .as_ref()
+      .map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default());
+
     Table {
       rolls,
+      roller,
       seats,
       id: uuid::Uuid::parse_str(&state.id).unwrap_or_default(),
       button: state.button,
-
-      ..Table::default()
     }
   }
 }
@@ -53,7 +57,11 @@ impl From<&Table> for bankah::TableState {
       seats,
       id: table.identifier(),
       button: table.button.clone(),
-      ..bankah::TableState::default()
+      roller: table.roller.map(|id| id.to_string()),
+      rolls: table.rolls.iter().map(|roll| roll.into()).collect(),
+
+      // TODO: the nonce is only represented in the stored data of a table; not the game state/logic itself.
+      nonce: String::new(),
     }
   }
 }

@@ -54,9 +54,23 @@ impl std::fmt::Debug for Roll {
   }
 }
 
+impl From<&Roll> for (u8, u8) {
+  fn from(roll: &Roll) -> (u8, u8) {
+    (roll.0, roll.1)
+  }
+}
+
 impl Roll {
   pub fn total(&self) -> u8 {
     self.0 + self.1
+  }
+
+  pub fn left(&self) -> u8 {
+    self.0
+  }
+
+  pub fn right(&self) -> u8 {
+    self.1
   }
 
   pub fn easyway(&self) -> Option<Hardway> {
