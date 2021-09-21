@@ -3,6 +3,7 @@ use serde::Serialize;
 pub mod admin;
 pub mod auth;
 pub mod bets;
+pub mod rolls;
 pub mod tables;
 
 use crate::web::{Body, Request, Response, Result};

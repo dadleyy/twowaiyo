@@ -1,12 +1,12 @@
 mod bets;
 mod checks;
 mod constants;
-mod errors;
 mod player;
 mod roll;
 mod seat;
 mod table;
 
+pub mod errors;
 pub mod io;
 
 pub use bets::Bet;

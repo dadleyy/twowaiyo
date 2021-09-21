@@ -10,6 +10,7 @@ use super::seat::Seat;
 #[derive(Clone)]
 pub struct Table {
   id: uuid::Uuid,
+  roller: Option<uuid::Uuid>,
   button: Option<u8>,
   seats: HashMap<uuid::Uuid, Seat>,
   rolls: Vec<Roll>,
@@ -64,6 +65,7 @@ impl Default for Table {
     let seats = HashMap::with_capacity(100);
     Table {
       id,
+      roller: None,
       button: None,
       seats,
       rolls,
@@ -77,13 +79,9 @@ fn apply_bet(mut table: Table, player: &Player, bet: &Bet) -> Result<Table, erro
     .remove(&player.id)
     .ok_or_else(|| errors::CarryError::new(table.clone(), errors::RuleViolation::InvalidSeat))?;
 
-  let updated = seat.bet(bet).unwrap_or_else(|error| {
-    log::warn!("unable to make bet - {:?}", error);
-    error.consume()
-  });
+  let updated = seat.bet(bet).map_err(|e| e.map(|_| table.clone()))?;
 
   table.seats.insert(player.id, updated);
-
   Ok(table)
 }
 
@@ -113,6 +111,7 @@ impl Table {
     let Table {
       id,
       button,
+      mut roller,
       rolls,
       seats,
     } = self;
@@ -128,11 +127,18 @@ impl Table {
           Some((key, value))
         }
       })
-      .collect();
+      .collect::<HashMap<uuid::Uuid, Seat>>();
+
+    roller = roller.and_then(|id| if id == player.id { None } else { Some(id) });
+
+    if let Some((id, _)) = seats.iter().next() {
+      roller = roller.or(Some(id.clone()));
+    }
 
     Table {
       id,
       button,
+      roller,
       rolls,
       seats,
     }
@@ -140,11 +146,14 @@ impl Table {
 
   pub fn sit(self, player: &mut Player) -> Self {
     let Table {
+      roller,
       id,
       button,
       mut seats,
       rolls,
     } = self;
+
+    let roller = roller.or(Some(player.id.clone()));
 
     seats.insert(player.id, Seat::with_balance(player.balance));
     player.balance = 0;
@@ -152,6 +161,7 @@ impl Table {
       id,
       button,
       seats,
+      roller,
       rolls,
     }
   }
@@ -181,6 +191,7 @@ impl Table {
 
     Table {
       id: self.id,
+      roller: self.roller,
       seats,
       rolls,
       button,
@@ -202,5 +213,55 @@ impl std::fmt::Debug for Table {
     }
 
     Ok(())
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::Table;
+  use crate::Player;
+
+  #[test]
+  fn test_roller_default() {
+    let table = Table::default();
+    assert_eq!(table.roller, None);
+  }
+
+  #[test]
+  fn test_roller_after_sit() {
+    let mut player = Player::default();
+    let table = Table::default().sit(&mut player);
+    assert_eq!(table.roller, Some(player.id.clone()));
+  }
+
+  #[test]
+  fn test_roller_after_sit_sit() {
+    let mut roller = Player::default();
+    let mut player = Player::default();
+    let table = Table::default().sit(&mut roller).sit(&mut player);
+    assert_eq!(table.roller, Some(roller.id.clone()));
+  }
+
+  #[test]
+  fn test_roller_after_sit_stand_other() {
+    let mut roller = Player::default();
+    let mut player = Player::default();
+    let table = Table::default().sit(&mut roller).sit(&mut player).stand(&mut player);
+    assert_eq!(table.roller, Some(roller.id.clone()));
+  }
+
+  #[test]
+  fn test_roller_after_sit_sit_stand() {
+    let mut roller = Player::default();
+    let mut player = Player::default();
+    let table = Table::default().sit(&mut roller).sit(&mut player).stand(&mut roller);
+    assert_eq!(table.roller, Some(player.id.clone()));
+  }
+
+  #[test]
+  fn test_roller_after_sit_stand() {
+    let mut roller = Player::default();
+    let table = Table::default().sit(&mut roller).stand(&mut roller);
+    assert_eq!(table.roller, None);
   }
 }

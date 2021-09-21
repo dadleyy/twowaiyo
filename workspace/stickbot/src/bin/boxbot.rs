@@ -57,16 +57,32 @@ async fn work(services: &stickbot::Services) -> Result<()> {
     bankah::TableJob::Bet(inner) => (inner.id.clone(), stickbot::processors::bet(&services, &inner.job).await),
   };
 
+  // Processors will return a Result<E, T>, where `E` can either represent a "fatal" error that is non-retryable or
+  // an error that is retryable. If the job is retryable, re-enqueue.
   let output = match result {
     Ok(output) => serde_json::to_string(&output)?,
     Err(bankah::JobError::Retryable) => {
-      let retry = job.retry();
+      let retry = job.retry().ok_or(Error::new(ErrorKind::Other, "no-retryable"))?;
+
       log::warn!("job failed, but is retryable, re-adding back to the queue");
-      return Ok(());
+      let serialized = serde_json::to_string(&retry)?;
+
+      // TODO: consider refactoring this command construction into a reusable place; it is used here and in our bets
+      // api route to push bet jobs onto our queue.
+      let command = kramer::Command::List(kramer::ListCommand::Push(
+        (kramer::Side::Right, kramer::Insertion::Always),
+        stickbot::constants::STICKBOT_BETS_QUEUE,
+        kramer::Arity::One(serialized),
+      ));
+
+      return services.command(&command).await.map(|_| ());
     }
-    Err(bankah::JobError::Terminal(error)) => return Err(std::io::Error::new(std::io::ErrorKind::Other, error)),
+    Err(bankah::JobError::Terminal(error)) => return Err(Error::new(ErrorKind::Other, error)),
   };
 
+  log::debug!("job '{}' processed - {}", id, output);
+
+  // Insert into our results hash the output from the processor.
   let sets = kramer::Command::Hashes(kramer::HashCommand::Set(
     stickbot::constants::STICKBOT_BET_RESULTS,
     kramer::Arity::One((&id, output.as_str())),
@@ -83,6 +99,7 @@ async fn run(services: stickbot::Services) -> Result<()> {
     if let Err(error) = work(&services).await {
       log::warn!("unable to process - {}", error);
     }
+
     async_std::task::sleep(Duration::from_secs(10)).await;
   }
 }

@@ -33,6 +33,7 @@ pub struct SeatState {
 pub struct TableState {
   pub id: String,
   pub button: Option<u8>,
+  pub roller: Option<String>,
   pub seats: HashMap<String, SeatState>,
   pub rolls: Vec<(u8, u8)>,
   pub nonce: String,
@@ -42,6 +43,7 @@ impl Default for TableState {
   fn default() -> Self {
     TableState {
       id: String::new(),
+      roller: None,
       button: None,
       rolls: vec![],
       seats: HashMap::new(),
@@ -107,8 +109,18 @@ impl TableJob {
 }
 
 #[derive(Debug, Serialize)]
+pub enum BetFailureReason {
+  InsufficientFunds,
+  MissingComeForOdds,
+  MissingPassForOdds,
+  Other,
+}
+
+#[derive(Debug, Serialize)]
 pub enum TableJobOutput {
   BetProcessed,
+  BetStale,
+  BetFailed(BetFailureReason),
 }
 
 #[derive(Debug, Serialize)]

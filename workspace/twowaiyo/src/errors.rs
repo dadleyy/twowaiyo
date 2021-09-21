@@ -77,7 +77,7 @@ impl std::fmt::Display for RuleViolation {
 
 pub struct CarryError<T> {
   kind: T,
-  error: RuleViolation,
+  pub error: RuleViolation,
 }
 
 impl<T> CarryError<T> {
@@ -85,6 +85,18 @@ impl<T> CarryError<T> {
     CarryError {
       error: reason,
       kind: item,
+    }
+  }
+
+  pub fn map<F, U>(self, mapper: F) -> CarryError<U>
+  where
+    F: Fn(T) -> U,
+  {
+    let CarryError { kind, error } = self;
+
+    CarryError {
+      error,
+      kind: mapper(kind),
     }
   }
 
