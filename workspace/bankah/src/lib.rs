@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum TargetKind {
   ComeOdds,
   PassOdds,
@@ -9,13 +9,13 @@ pub enum TargetKind {
   Hardway,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum RaceType {
   Pass,
   Come,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum BetState {
   Race(RaceType, u32, Option<u8>),
@@ -58,7 +58,7 @@ pub struct PlayerState {
   pub balance: u32,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct BetJob {
   pub bet: BetState,
   pub player: String,
@@ -66,28 +66,53 @@ pub struct BetJob {
   pub version: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JobWapper<T> {
+  pub job: T,
+  pub id: String,
+  pub attempts: u8,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum TableJob {
-  Bet((String, BetJob)),
+  Bet(JobWapper<BetJob>),
 }
 
 impl TableJob {
   pub fn id(&self) -> String {
     match self {
-      TableJob::Bet((id, _)) => id.clone(),
+      TableJob::Bet(inner) => inner.id.clone(),
+    }
+  }
+
+  pub fn retry(&self) -> Option<Self> {
+    match self {
+      TableJob::Bet(inner) => Some(TableJob::Bet(JobWapper {
+        attempts: inner.attempts + 1,
+        ..inner.clone()
+      })),
     }
   }
 
   pub fn bet(state: BetState, player: String, table: String, version: String) -> Self {
     let id = uuid::Uuid::new_v4().to_string();
-    TableJob::Bet((
-      id,
-      BetJob {
-        bet: state,
-        player,
-        table,
-        version,
-      },
-    ))
+    let job = BetJob {
+      bet: state,
+      player,
+      table,
+      version,
+    };
+    TableJob::Bet(JobWapper { job, id, attempts: 0 })
   }
+}
+
+#[derive(Debug, Serialize)]
+pub enum TableJobOutput {
+  BetProcessed,
+}
+
+#[derive(Debug, Serialize)]
+pub enum JobError {
+  Retryable,
+  Terminal(String),
 }

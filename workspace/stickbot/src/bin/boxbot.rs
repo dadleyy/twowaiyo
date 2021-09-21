@@ -19,20 +19,20 @@ fn parse_pop(response: &kramer::ResponseValue) -> Option<bankah::TableJob> {
   None
 }
 
-async fn work(services: &stickbot::Services) -> Result<()> {
+async fn pop_next(services: &stickbot::Services) -> Result<Option<bankah::TableJob>> {
   let result = match services.command(&POP_CMD).await {
     Err(error) => {
       log::warn!("unable to pop from bet queue - {}", error);
       return Err(Error::new(ErrorKind::Other, format!("{}", error)));
     }
     Ok(kramer::Response::Item(kramer::ResponseValue::Empty)) => {
-      log::debug!("nothing to pop off, sleeping and moving on");
-      return Ok(());
+      log::debug!("nothing to pop off");
+      return Ok(None);
     }
     Ok(kramer::Response::Array(values)) => values,
     Ok(kramer::Response::Error) => {
       log::warn!("unable to pop from queue - redis error");
-      return Err(Error::new(ErrorKind::Other, "unkown-error"));
+      return Err(Error::new(ErrorKind::Other, "invalid-response"));
     }
     Ok(kramer::Response::Item(inner)) => {
       log::warn!("unknown response from pop - '{:?}'", inner);
@@ -42,25 +42,34 @@ async fn work(services: &stickbot::Services) -> Result<()> {
 
   log::debug!("result from pop - {:?}, attempting to deserialize", result);
 
-  let job = result
-    .get(1)
-    .and_then(parse_pop)
-    .ok_or(Error::new(ErrorKind::Other, "unrecognized-pop"))?;
+  Ok(result.get(1).and_then(parse_pop))
+}
+
+async fn work(services: &stickbot::Services) -> Result<()> {
+  let job = match pop_next(&services).await? {
+    Some(job) => job,
+    None => return Ok(()),
+  };
 
   log::debug!("result from deserialize - {:?}", job);
 
-  let (id, result) = match job {
-    bankah::TableJob::Bet((id, bet)) => (id, stickbot::processors::bet(&services, &bet).await),
+  let (id, result) = match &job {
+    bankah::TableJob::Bet(inner) => (inner.id.clone(), stickbot::processors::bet(&services, &inner.job).await),
   };
 
-  match result {
-    Ok(_) => log::info!("job '{}' processed", id),
-    Err(error) => log::warn!("unable to process job - {}", error),
-  }
+  let output = match result {
+    Ok(output) => serde_json::to_string(&output)?,
+    Err(bankah::JobError::Retryable) => {
+      let retry = job.retry();
+      log::warn!("job failed, but is retryable, re-adding back to the queue");
+      return Ok(());
+    }
+    Err(bankah::JobError::Terminal(error)) => return Err(std::io::Error::new(std::io::ErrorKind::Other, error)),
+  };
 
   let sets = kramer::Command::Hashes(kramer::HashCommand::Set(
     stickbot::constants::STICKBOT_BET_RESULTS,
-    kramer::Arity::One((&id, "done")),
+    kramer::Arity::One((&id, output.as_str())),
     kramer::Insertion::Always,
   ));
 

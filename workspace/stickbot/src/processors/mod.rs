@@ -1,6 +1,6 @@
-use std::io::Result;
+use bankah;
 
-pub async fn bet(services: &crate::Services, job: &bankah::BetJob) -> Result<()> {
+pub async fn bet(services: &crate::Services, job: &bankah::BetJob) -> Result<bankah::TableJobOutput, bankah::JobError> {
   log::debug!("processing bet, services {:?}", services.status().await);
-  Ok(())
+  Ok(bankah::TableJobOutput::BetProcessed)
 }
