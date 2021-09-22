@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 
 use crate::db::doc;
 use crate::web::{cookie as get_cookie, Body, Error, Request, Response, Result};
@@ -23,9 +24,22 @@ impl BetPayload {
       "come" => Some(bankah::BetState::Race(bankah::RaceType::Come, self.amount, None)),
       "pass" => Some(bankah::BetState::Race(bankah::RaceType::Pass, self.amount, None)),
       "pass-odds" => Some(bankah::BetState::Target(bankah::TargetKind::PassOdds, self.amount, 0)),
+
       "come-odds" => self
         .target
         .map(|t| bankah::BetState::Target(bankah::TargetKind::ComeOdds, self.amount, t)),
+
+      "field" => Some(bankah::BetState::Field(self.amount)),
+
+      "hardway" => self
+        .target
+        .and_then(|raw| twowaiyo::Hardway::try_from(raw).ok().map(|_| raw))
+        .map(|validated| bankah::BetState::Target(bankah::TargetKind::Hardway, self.amount, validated)),
+
+      "place" => self
+        .target
+        .map(|t| bankah::BetState::Target(bankah::TargetKind::Place, self.amount, t)),
+
       _ => {
         log::warn!("unknown bet payload - {:?}", self);
         None
@@ -60,6 +74,8 @@ pub async fn create(mut request: Request) -> Result {
   if state.nonce != payload.nonce {
     return Err(Error::from_str(422, "bad-version"));
   }
+
+  log::info!("player '{}' making bet '{:?}', submitting job", player.id, bet);
 
   let job = bankah::TableJob::bet(bet, player.id.clone(), state.id.clone(), state.nonce.clone());
 

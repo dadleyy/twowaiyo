@@ -54,8 +54,7 @@ pub async fn roll(
 }
 
 pub async fn bet(services: &crate::Services, job: &bankah::BetJob) -> Result<bankah::TableJobOutput, bankah::JobError> {
-  log::debug!("processing bet, services {:?}", services.status().await);
-
+  log::info!("processing bet job '{:?}'", job);
   let tables = services.tables();
   let players = services.players();
 
@@ -84,6 +83,8 @@ pub async fn bet(services: &crate::Services, job: &bankah::BetJob) -> Result<ban
   let table = twowaiyo::Table::from(&tstate);
   let player = twowaiyo::Player::from(&pstate);
   let bet = twowaiyo::Bet::from(&job.bet);
+
+  log::info!("processing bet {:?} for player {:?}", bet, player);
 
   if job.version != tstate.nonce {
     let id = &tstate.id;

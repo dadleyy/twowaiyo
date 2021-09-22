@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::iter::FromIterator;
 
 use super::checks::is_place;
@@ -8,6 +9,23 @@ pub enum Hardway {
   Six,
   Eight,
   Ten,
+}
+
+impl TryFrom<u8> for Hardway {
+  type Error = std::io::Error;
+
+  fn try_from(target: u8) -> Result<Hardway, Self::Error> {
+    match target {
+      4 => Ok(Hardway::Four),
+      6 => Ok(Hardway::Six),
+      8 => Ok(Hardway::Eight),
+      10 => Ok(Hardway::Ten),
+      other => Err(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        format!("'{}' is not a hardway", other),
+      )),
+    }
+  }
 }
 
 impl From<&u8> for Hardway {

@@ -17,7 +17,7 @@ pub async fn list(request: Request) -> Result {
     .and_then(|authority| authority.player())
     .ok_or(Error::from_str(404, ""))?;
 
-  log::info!("listing tables for '{:?}'", player);
+  log::debug!("listing tables for '{:?}'", player);
   let collection = request.state().tables();
 
   let mut tables = collection.find(None, None).await.map_err(|error| {
@@ -28,8 +28,6 @@ pub async fn list(request: Request) -> Result {
   let mut page: Vec<bankah::TableState> = Vec::with_capacity(10);
 
   while let Some(doc) = tables.next().await {
-    log::info!("found doc - {:?}", doc);
-
     if let Ok(state) = doc {
       page.push(state)
     }
@@ -189,7 +187,7 @@ pub async fn leave(mut request: Request) -> Result {
     .player()
     .ok_or(Error::from_str(404, "no-player"))?;
 
-  log::info!("user '{}' attempting to leave table '{}'", player.id, query.id);
+  log::debug!("user '{}' attempting to leave table '{}'", player.id, query.id);
 
   let tables = request.state().tables();
   let players = request.state().players();
@@ -235,7 +233,7 @@ pub async fn leave(mut request: Request) -> Result {
       error
     })?;
 
-  log::info!("finished leaving");
+  log::debug!("finished leaving");
 
   Body::from_json(&updated).map(|body| Response::builder(200).body(body).build())
 }

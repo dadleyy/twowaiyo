@@ -112,7 +112,8 @@ impl From<&bankah::BetState> for Bet {
           target: target.clone(),
         }),
       },
-      _ => Bet::Hardway(10, Hardway::Ten),
+
+      bankah::BetState::Field(amount) => Bet::Field(*amount),
     }
   }
 }
