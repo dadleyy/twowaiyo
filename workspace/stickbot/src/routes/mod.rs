@@ -3,6 +3,7 @@ use serde::Serialize;
 pub mod admin;
 pub mod auth;
 pub mod bets;
+pub mod jobs;
 pub mod rolls;
 pub mod tables;
 

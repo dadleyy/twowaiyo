@@ -123,7 +123,7 @@ impl TableJob {
   }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum BetFailureReason {
   InsufficientFunds,
   InvalidComeBet,
@@ -132,7 +132,7 @@ pub enum BetFailureReason {
   Other,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum TableJobOutput {
   BetProcessed,
   BetStale,
