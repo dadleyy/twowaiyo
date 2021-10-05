@@ -8,6 +8,26 @@ use crate::auth;
 use crate::constants;
 use crate::db;
 
+async fn connect_redis() -> Result<TcpStream> {
+  let config = (
+    std::env::var(constants::REDIS_HOSTNAME_ENV).unwrap_or_default(),
+    std::env::var(constants::REDIS_PORT_ENV).unwrap_or_default(),
+    std::env::var(constants::REDIS_PASSWORD_ENV).unwrap_or_default(),
+  );
+
+  log::debug!("redis configuration - '{}', connecting", config.0);
+  let mut redis = TcpStream::connect(format!("{}:{}", config.0, config.1)).await?;
+  log::debug!("connection established - {:?}, authenticating", redis.peer_addr());
+
+  if config.2.len() > 0 {
+    let cmd = kramer::Command::Auth::<String, String>(kramer::AuthCredentials::Password(config.2));
+    let result = kramer::execute(&mut redis, cmd).await?;
+    log::debug!("authentication result - {:?}", result);
+  }
+
+  Ok(redis)
+}
+
 #[derive(Clone)]
 pub struct Services {
   db: db::Client,
@@ -65,9 +85,41 @@ impl Services {
     S: std::fmt::Display,
     V: std::fmt::Display,
   {
-    let mut lock = self.redis.lock().await;
-    let mut redis: &mut TcpStream = &mut lock;
-    kramer::execute(&mut redis, command).await
+    self.inner_command(command, 0).await
+  }
+
+  async fn inner_command<S, V>(&self, command: &kramer::Command<S, V>, mut attempt: u8) -> Result<kramer::Response>
+  where
+    S: std::fmt::Display,
+    V: std::fmt::Display,
+  {
+    loop {
+      let mut lock = self.redis.lock().await;
+      let mut redis: &mut TcpStream = &mut lock;
+      log::debug!("attempting to send command to redis");
+      let result = kramer::execute(&mut redis, command).await;
+
+      if attempt > 10 {
+        log::warn!("retry-attempts exceeded maximum, returning result {:?}", result);
+        return result;
+      }
+
+      if let Err(error) = &result {
+        log::warn!("failed executing command - {}", error);
+
+        if error.kind() == ErrorKind::BrokenPipe && attempt < 10 {
+          log::info!("broken pipe, attempting to re-establish connection");
+          *lock = connect_redis().await?;
+        }
+
+        attempt = attempt + 1;
+      }
+
+      if let Ok(response) = result {
+        log::debug!("redis command executed successfully - {:?}", response);
+        return Ok(response);
+      }
+    }
   }
 
   pub async fn status(&self) -> Result<()> {
@@ -82,21 +134,7 @@ impl Services {
     let mongo_url = std::env::var(constants::MONGO_DB_ENV_URL).unwrap_or_default();
     log::debug!("attempting to establish mongo connection at {}", mongo_url);
     let mongo = db::connect(mongo_url).await?;
-
-    let redis_config = (
-      std::env::var(constants::REDIS_HOSTNAME_ENV).unwrap_or_default(),
-      std::env::var(constants::REDIS_PORT_ENV).unwrap_or_default(),
-      std::env::var(constants::REDIS_PASSWORD_ENV).unwrap_or_default(),
-    );
-    log::debug!("redis configuration - '{}', connecting", redis_config.0);
-    let mut redis = TcpStream::connect(format!("{}:{}", redis_config.0, redis_config.1)).await?;
-    log::debug!("connection established - {:?}, authenticating", redis.peer_addr());
-
-    if redis_config.2.len() > 0 {
-      let cmd = kramer::Command::Auth::<String, String>(kramer::AuthCredentials::Password(redis_config.2));
-      let result = kramer::execute(&mut redis, cmd).await?;
-      log::debug!("authentication result - {:?}", result);
-    }
+    let redis = connect_redis().await?;
 
     Ok(Services {
       db: mongo,
