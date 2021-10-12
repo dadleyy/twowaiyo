@@ -1,8 +1,20 @@
 use super::{
-  bets::Bet,
+  bets::{Bet, BetResult},
   errors::{CarryError, PlayerBetViolation, RuleViolation},
   roll::Roll,
 };
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SeatRuns {
+  wins: Vec<(Bet, u32)>,
+  losses: Vec<(Bet, u32)>,
+}
+
+impl SeatRuns {
+  pub fn winnings(&self) -> u32 {
+    self.wins.iter().fold(0, |acc, item| acc + item.1)
+  }
+}
 
 #[derive(Clone, Default, PartialEq)]
 pub struct Seat {
@@ -65,6 +77,36 @@ impl Seat {
     }
 
     (balance, Some(Seat { bets, balance: 0 }))
+  }
+
+  pub fn run(self, roll: &Roll) -> (Self, SeatRuns) {
+    let Seat { bets, balance } = self;
+    let start: (Vec<Bet>, _) = (vec![], SeatRuns::default());
+
+    let (stays, runs) = bets.into_iter().fold(start, |(stays, runs), item| {
+      let result = item.result(&roll);
+
+      let runs = match &result {
+        BetResult::Win(amount) => SeatRuns {
+          losses: runs.losses,
+          wins: runs.wins.into_iter().chain(Some((item, amount + 0))).collect(),
+        },
+        BetResult::Loss(amount) => SeatRuns {
+          wins: runs.wins,
+          losses: runs.losses.into_iter().chain(Some((item, amount + 0))).collect(),
+        },
+        BetResult::Noop(_) => runs,
+      };
+
+      (stays.into_iter().chain(result.remaining()).collect(), runs)
+    });
+
+    let next = Seat {
+      balance: balance + runs.winnings(),
+      bets: stays,
+    };
+
+    return (next, runs);
   }
 
   pub fn roll(self, roll: &Roll) -> Self {
@@ -138,8 +180,60 @@ impl Seat {
 
 #[cfg(test)]
 mod test {
-  use super::Seat;
+  use super::{Seat, SeatRuns};
   use crate::bets::Bet;
+
+  #[test]
+  fn run_with_winners() {
+    let seat = Seat::with_balance(100);
+    let seat = seat.bet(&Bet::start_pass(10)).expect("");
+    let roll = vec![2u8, 5u8].into_iter().collect();
+    let expected = SeatRuns {
+      wins: vec![(Bet::start_pass(10), 20)],
+      losses: vec![],
+    };
+    assert_eq!(seat.run(&roll), (Seat::with_balance(110), expected));
+  }
+
+  #[test]
+  fn run_with_losers() {
+    let seat = Seat::with_balance(100);
+    let seat = seat.bet(&Bet::start_pass(10)).expect("");
+    let roll = vec![2u8, 1u8].into_iter().collect();
+    let expected = SeatRuns {
+      wins: vec![],
+      losses: vec![(Bet::start_pass(10), 10)],
+    };
+    assert_eq!(seat.run(&roll), (Seat::with_balance(90), expected));
+  }
+
+  #[test]
+  fn run_with_losers_after_pass() {
+    let seat = Seat::with_balance(100);
+    let seat = seat.bet(&Bet::start_pass(10)).expect("");
+    let roll = vec![2u8, 4u8].into_iter().collect();
+    let passed = seat.run(&roll).0;
+    let crapped = vec![2u8, 5u8].into_iter().collect();
+    let expected = SeatRuns {
+      wins: vec![],
+      losses: vec![(Bet::start_pass(10).result(&roll).remaining().unwrap(), 10)],
+    };
+    assert_eq!(passed.run(&crapped), (Seat::with_balance(90), expected));
+  }
+
+  #[test]
+  fn run_with_winners_after_pass() {
+    let seat = Seat::with_balance(100);
+    let seat = seat.bet(&Bet::start_pass(10)).expect("");
+    let roll = vec![2u8, 4u8].into_iter().collect();
+    let passed = seat.run(&roll).0;
+    let hit = vec![2u8, 4u8].into_iter().collect();
+    let expected = SeatRuns {
+      losses: vec![],
+      wins: vec![(Bet::start_pass(10).result(&roll).remaining().unwrap(), 20)],
+    };
+    assert_eq!(passed.run(&hit), (Seat::with_balance(110), expected));
+  }
 
   #[test]
   fn stand_with_nothing() {

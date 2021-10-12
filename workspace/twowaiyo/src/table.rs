@@ -7,6 +7,12 @@ use super::player::Player;
 use super::roll::Roll;
 use super::seat::Seat;
 
+#[derive(Debug, Clone)]
+pub struct RunResult {
+  table: Table,
+  results: HashMap<uuid::Uuid, Bet>,
+}
+
 #[derive(Clone)]
 pub struct Table {
   id: uuid::Uuid,
@@ -171,6 +177,13 @@ impl Table {
       seats,
       roller,
       rolls,
+    }
+  }
+
+  pub fn run(self) -> RunResult {
+    RunResult {
+      table: self,
+      results: HashMap::new(),
     }
   }
 

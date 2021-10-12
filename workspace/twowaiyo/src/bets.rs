@@ -4,7 +4,7 @@ use super::roll::{Hardway, Roll};
 pub enum BetResult<T> {
   Noop(T),
   Win(u32),
-  Loss,
+  Loss(u32),
 }
 
 impl<T> BetResult<T> {
@@ -14,7 +14,7 @@ impl<T> BetResult<T> {
   {
     match self {
       BetResult::Win(amount) => BetResult::Win(amount),
-      BetResult::Loss => BetResult::Loss,
+      BetResult::Loss(amount) => BetResult::Loss(amount),
       BetResult::Noop(item) => BetResult::Noop(mapper(item)),
     }
   }
@@ -22,7 +22,7 @@ impl<T> BetResult<T> {
   pub fn winnings(&self) -> u32 {
     match self {
       BetResult::Win(amount) => *amount,
-      BetResult::Loss => 0,
+      BetResult::Loss(_) => 0,
       BetResult::Noop(_) => 0,
     }
   }
@@ -30,7 +30,7 @@ impl<T> BetResult<T> {
   pub fn remaining(self) -> Option<T> {
     match self {
       BetResult::Win(_) => None,
-      BetResult::Loss => None,
+      BetResult::Loss(_) => None,
       BetResult::Noop(item) => Some(item),
     }
   }
@@ -61,14 +61,14 @@ impl RaceBet {
 
     match (self.target, total) {
       (Some(goal), value) if value == goal => BetResult::Win(self.amount + self.amount),
-      (Some(_), 7) => BetResult::Loss,
+      (Some(_), 7) => BetResult::Loss(self.amount),
       (Some(goal), _) => BetResult::Noop(RaceBet {
         amount: self.amount,
         target: Some(goal),
       }),
 
       (None, 7) | (None, 11) => BetResult::Win(self.amount + self.amount),
-      (None, 2) | (None, 3) | (None, 12) => BetResult::Loss,
+      (None, 2) | (None, 3) | (None, 12) => BetResult::Loss(self.amount),
       (None, value) => BetResult::Noop(RaceBet {
         amount: self.amount,
         target: Some(value),
@@ -153,7 +153,7 @@ enum Odds {
 
 fn odds_result(total: u8, target: u8, wager: u32, odds: Odds) -> BetResult<(u32, u8)> {
   if total == 7 {
-    return BetResult::Loss;
+    return BetResult::Loss(wager);
   }
 
   if total != target {
@@ -242,11 +242,11 @@ impl Bet {
       Bet::Field(amount) => match total {
         2 | 12 => BetResult::Win((amount * 2) + amount),
         3 | 4 | 9 | 10 | 11 => BetResult::Win(amount + amount),
-        _ => BetResult::Loss,
+        _ => BetResult::Loss(amount + 0),
       },
       Bet::Hardway(amount, target) => {
         if roll.easyway().map(|e| e == *target).unwrap_or(false) || total == 7 {
-          return BetResult::Loss;
+          return BetResult::Loss(amount + 0);
         }
 
         if roll.hardway().map(|h| h == *target).unwrap_or(false) {
@@ -315,36 +315,36 @@ mod test {
   fn test_miss_hardway_four() {
     let bet = Bet::Hardway(10, Hardway::Four);
     let roll = vec![1u8, 3u8].into_iter().collect();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(10));
     let roll = vec![1u8, 6u8].into_iter().collect();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(10));
   }
 
   #[test]
   fn test_miss_hardway_six() {
     let bet = Bet::Hardway(10, Hardway::Six);
     let roll = vec![2u8, 4u8].into_iter().collect();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(10));
     let roll = vec![1u8, 6u8].into_iter().collect();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(10));
   }
 
   #[test]
   fn test_miss_hardway_eight() {
     let bet = Bet::Hardway(10, Hardway::Eight);
     let roll = vec![5u8, 3u8].into_iter().collect();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(10));
     let roll = vec![1u8, 6u8].into_iter().collect();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(10));
   }
 
   #[test]
   fn test_miss_hardway_ten() {
     let bet = Bet::Hardway(10, Hardway::Ten);
     let roll = vec![4u8, 6u8].into_iter().collect();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(10));
     let roll = vec![1u8, 6u8].into_iter().collect();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(10));
   }
 
   #[test]
@@ -354,7 +354,7 @@ mod test {
       target: None,
     };
     let roll = vec![1u8, 1u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(10));
   }
 
   #[test]
@@ -364,7 +364,7 @@ mod test {
       target: None,
     };
     let roll = vec![1u8, 2u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(10));
   }
 
   #[test]
@@ -490,7 +490,7 @@ mod test {
       target: None,
     };
     let roll = vec![6u8, 6u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(10));
   }
 
   // ON
@@ -560,7 +560,7 @@ mod test {
       target: Some(4),
     };
     let roll = vec![3u8, 4u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(10));
   }
 
   #[test]
@@ -642,7 +642,7 @@ mod test {
   fn test_start_pass_fail() {
     let bet = Bet::start_pass(100);
     let roll = vec![6u8, 6u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(100));
   }
 
   #[test]
@@ -662,7 +662,7 @@ mod test {
   fn test_place_fail() {
     let bet = Bet::Place(100, 10);
     let roll = vec![3u8, 4u8].into_iter().collect::<Roll>();
-    assert_eq!(bet.result(&roll), BetResult::Loss);
+    assert_eq!(bet.result(&roll), BetResult::Loss(100));
   }
 
   #[test]
