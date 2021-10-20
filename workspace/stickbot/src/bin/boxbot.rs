@@ -103,8 +103,6 @@ async fn run(services: stickbot::Services) -> Result<()> {
     if let Err(error) = work(&services).await {
       log::warn!("unable to process - {}", error);
     }
-
-    async_std::task::sleep(Duration::from_secs(2)).await;
   }
 }
 
