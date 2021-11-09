@@ -38,7 +38,7 @@ pub async fn roll(
   }
 
   let updated = table.roll();
-  let mut next = bankah::TableState::from(&updated);
+  let mut next = bankah::TableState::from(&updated.table);
   next.nonce = uuid::Uuid::new_v4().to_string();
 
   services

@@ -1,5 +1,4 @@
 use std::io::{Error, ErrorKind, Result};
-use std::time::Duration;
 
 use stickbot;
 

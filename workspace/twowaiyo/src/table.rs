@@ -5,74 +5,32 @@ use super::bets::Bet;
 use super::errors;
 use super::player::Player;
 use super::roll::Roll;
-use super::seat::Seat;
+use super::rollers::RandomRoller;
+use super::seat::{Seat, SeatRuns};
 
 #[derive(Debug, Clone)]
-pub struct RunResult {
-  table: Table,
-  results: HashMap<uuid::Uuid, Bet>,
+pub struct RunResult<R>
+where
+  R: Clone + Default + Iterator<Item = u8>,
+{
+  pub table: Table<R>,
+  pub results: HashMap<uuid::Uuid, SeatRuns>,
 }
 
 #[derive(Clone)]
-pub struct Table {
+pub struct Table<R>
+where
+  R: Clone + Default + Iterator<Item = u8>,
+{
   id: uuid::Uuid,
   roller: Option<uuid::Uuid>,
   button: Option<u8>,
   seats: HashMap<uuid::Uuid, Seat>,
   rolls: Vec<Roll>,
+  dice: R,
 }
 
-impl From<&bankah::TableState> for Table {
-  fn from(state: &bankah::TableState) -> Self {
-    let rolls = state
-      .rolls
-      .iter()
-      .map(|tupe| IntoIterator::into_iter([tupe.0, tupe.1]).collect())
-      .collect();
-
-    let seats = state
-      .seats
-      .iter()
-      .map(|(key, state)| (uuid::Uuid::parse_str(&key).unwrap_or_default(), state.into()))
-      .collect();
-
-    let roller = state
-      .roller
-      .as_ref()
-      .map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default());
-
-    Table {
-      rolls,
-      roller,
-      seats,
-      id: uuid::Uuid::parse_str(&state.id).unwrap_or_default(),
-      button: state.button,
-    }
-  }
-}
-
-impl From<&Table> for bankah::TableState {
-  fn from(table: &Table) -> bankah::TableState {
-    let seats = table
-      .seats
-      .iter()
-      .map(|(id, seat)| (id.to_string(), seat.into()))
-      .collect();
-
-    bankah::TableState {
-      seats,
-      id: table.identifier(),
-      button: table.button.clone(),
-      roller: table.roller.map(|id| id.to_string()),
-      rolls: table.rolls.iter().map(|roll| roll.into()).collect(),
-
-      // TODO: the nonce is only represented in the stored data of a table; not the game state/logic itself.
-      nonce: String::new(),
-    }
-  }
-}
-
-impl Default for Table {
+impl Default for Table<RandomRoller> {
   fn default() -> Self {
     let rolls = Vec::with_capacity(crate::constants::MAX_ROLL_HISTORY);
     let id = uuid::Uuid::new_v4();
@@ -83,11 +41,15 @@ impl Default for Table {
       button: None,
       seats,
       rolls,
+      dice: RandomRoller::default(),
     }
   }
 }
 
-fn apply_bet(mut table: Table, player: &Player, bet: &Bet) -> Result<Table, errors::CarryError<Table>> {
+fn apply_bet<R>(mut table: Table<R>, player: &Player, bet: &Bet) -> Result<Table<R>, errors::CarryError<Table<R>>>
+where
+  R: Clone + Default + Iterator<Item = u8>,
+{
   let seat = table
     .seats
     .remove(&player.id)
@@ -99,7 +61,30 @@ fn apply_bet(mut table: Table, player: &Player, bet: &Bet) -> Result<Table, erro
   Ok(table)
 }
 
-impl Table {
+impl<R> Table<R>
+where
+  R: Clone + Default + Iterator<Item = u8>,
+{
+  pub fn with_dice(dice: R) -> Self {
+    let Table {
+      id,
+      roller,
+      button,
+      rolls,
+      seats,
+      dice: _,
+    } = Table::<RandomRoller>::default();
+
+    Table {
+      dice,
+      button,
+      seats,
+      roller,
+      id,
+      rolls,
+    }
+  }
+
   pub fn identifier(&self) -> String {
     self.id.to_string()
   }
@@ -126,6 +111,7 @@ impl Table {
       id,
       button,
       mut roller,
+      dice,
       rolls,
       seats,
     } = self;
@@ -155,11 +141,13 @@ impl Table {
       roller,
       rolls,
       seats,
+      dice,
     }
   }
 
   pub fn sit(self, player: &mut Player) -> Self {
     let Table {
+      dice,
       roller,
       id,
       button,
@@ -173,6 +161,7 @@ impl Table {
     player.balance = 0;
     Table {
       id,
+      dice,
       button,
       seats,
       roller,
@@ -180,29 +169,27 @@ impl Table {
     }
   }
 
-  pub fn run(self) -> RunResult {
-    RunResult {
-      table: self,
-      results: HashMap::new(),
-    }
-  }
-
-  pub fn roll(self) -> Self {
-    let mut buffer = [0u8, 2];
-
-    if let Err(error) = getrandom::getrandom(&mut buffer) {
-      log::warn!("unable to generate random numbers - {:?}", error);
-      return Table { ..self };
-    }
-
-    let roll = buffer.iter().map(|item| item.rem_euclid(6) + 1).collect::<Roll>();
+  pub fn roll(mut self) -> RunResult<R> {
+    let roll = vec![self.dice.next(), self.dice.next()]
+      .into_iter()
+      .flatten()
+      .collect::<Roll>();
 
     let result = roll.result(&self.button);
     let button = result.button(self.button);
 
     log::debug!("generated roll - {:?}, result: {:?}", roll, result);
+    let pop = self.population();
 
-    let seats = self.seats.into_iter().map(|(k, v)| (k, v.roll(&roll))).collect();
+    let (seats, results) = self.seats.into_iter().map(|(key, seat)| (key, seat.roll(&roll))).fold(
+      (HashMap::with_capacity(pop), HashMap::with_capacity(pop)),
+      |(mut seats, mut totals), res| {
+        let (uuid, (seat, results)) = res;
+        seats.insert(uuid, seat);
+        totals.insert(uuid, results);
+        (seats, totals)
+      },
+    );
 
     let rolls = Some(roll)
       .into_iter()
@@ -210,17 +197,23 @@ impl Table {
       .take(crate::constants::MAX_ROLL_HISTORY)
       .collect::<Vec<Roll>>();
 
-    Table {
+    let next = Table {
       id: self.id,
       roller: self.roller,
-      seats,
-      rolls,
+      dice: self.dice,
       button,
-    }
+      rolls,
+      seats,
+    };
+
+    RunResult { table: next, results }
   }
 }
 
-impl std::fmt::Debug for Table {
+impl<R> std::fmt::Debug for Table<R>
+where
+  R: Clone + Default + Iterator<Item = u8>,
+{
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     writeln!(formatter, "table {}", self.id)?;
     writeln!(formatter, "button:    {:?}", self.button)?;
@@ -237,10 +230,105 @@ impl std::fmt::Debug for Table {
   }
 }
 
+impl From<&bankah::TableState> for Table<crate::rollers::RandomRoller> {
+  fn from(state: &bankah::TableState) -> Self {
+    let rolls = state
+      .rolls
+      .iter()
+      .map(|tupe| IntoIterator::into_iter([tupe.0, tupe.1]).collect())
+      .collect();
+
+    let seats = state
+      .seats
+      .iter()
+      .map(|(key, state)| (uuid::Uuid::parse_str(&key).unwrap_or_default(), state.into()))
+      .collect();
+
+    let roller = state
+      .roller
+      .as_ref()
+      .map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default());
+
+    Table {
+      rolls,
+      roller,
+      seats,
+      id: uuid::Uuid::parse_str(&state.id).unwrap_or_default(),
+      button: state.button,
+      dice: RandomRoller::default(),
+    }
+  }
+}
+
+impl<R> From<&Table<R>> for bankah::TableState
+where
+  R: Clone + Default + Iterator<Item = u8>,
+{
+  fn from(table: &Table<R>) -> bankah::TableState {
+    let seats = table
+      .seats
+      .iter()
+      .map(|(id, seat)| (id.to_string(), seat.into()))
+      .collect();
+
+    bankah::TableState {
+      seats,
+      id: table.identifier(),
+      button: table.button.clone(),
+      roller: table.roller.map(|id| id.to_string()),
+      rolls: table.rolls.iter().map(|roll| roll.into()).collect(),
+
+      // TODO: the nonce is only represented in the stored data of a table; not the game state/logic itself.
+      nonce: String::new(),
+    }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::Table;
-  use crate::Player;
+  use crate::{Bet, Player};
+
+  #[derive(Debug, Default, Clone)]
+  struct TestDice(Option<u8>, Option<u8>);
+
+  impl From<(u8, u8)> for TestDice {
+    fn from(input: (u8, u8)) -> TestDice {
+      TestDice(Some(input.0), Some(input.1))
+    }
+  }
+
+  impl Iterator for TestDice {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+      self.0.take().or_else(|| self.1.take())
+    }
+  }
+
+  #[test]
+  fn test_run_with_wins() {
+    let mut player = Player::default();
+    let table = Table::with_dice(TestDice::from((2, 5)))
+      .sit(&mut player)
+      .bet(&player, &Bet::start_pass(100))
+      .unwrap();
+    let result = table.roll();
+    assert_eq!(result.results.get(&player.id).expect("missing player").losses(), 0);
+    assert_eq!(result.results.get(&player.id).expect("missing player").winnings(), 200);
+  }
+
+  #[test]
+  fn test_run_with_losses() {
+    let mut player = Player::default();
+    let table = Table::with_dice(TestDice::from((2, 1)))
+      .sit(&mut player)
+      .bet(&player, &Bet::start_pass(100))
+      .unwrap();
+    let result = table.roll();
+    assert_eq!(result.results.get(&player.id).expect("missing player").losses(), 100);
+    assert_eq!(result.results.get(&player.id).expect("missing player").winnings(), 0);
+  }
 
   #[test]
   fn test_roller_default() {

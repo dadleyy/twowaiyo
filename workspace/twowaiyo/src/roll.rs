@@ -60,8 +60,8 @@ where
 {
   fn from_iter<T: IntoIterator<Item = U>>(target: T) -> Self {
     let mut iter = target.into_iter();
-    let first = iter.next().map_or(0, |u| u.into());
-    let second = iter.next().map_or(0, |u| u.into());
+    let first = iter.next().map_or(1, |u| u.into());
+    let second = iter.next().map_or(1, |u| u.into());
     Roll(first, second)
   }
 }

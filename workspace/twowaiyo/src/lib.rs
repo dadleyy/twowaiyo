@@ -3,6 +3,7 @@ mod checks;
 mod constants;
 mod player;
 mod roll;
+mod rollers;
 mod seat;
 mod table;
 

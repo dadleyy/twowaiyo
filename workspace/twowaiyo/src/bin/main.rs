@@ -40,7 +40,8 @@ fn main() -> Result<()> {
 
       Some(twowaiyo::io::Action::Roll) => {
         log::info!("throwing die...");
-        table = table.roll();
+        let result = table.roll();
+        table = result.table;
       }
       Some(twowaiyo::io::Action::Bet(bet)) => {
         log::info!("attempting bet - {:?}", bet);
