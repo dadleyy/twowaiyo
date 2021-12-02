@@ -5,6 +5,7 @@ pub const MONGO_DB_DATABASE_NAME: &'static str = "stickbot";
 pub const MONGO_DB_APP_NAME: &'static str = "twowaiyo:stickbot";
 
 pub const MONGO_DB_TABLE_COLLECTION_NAME: &'static str = "stickbot.tables";
+pub const MONGO_DB_TABLE_LIST_COLLECTION_NAME: &'static str = "stickbot.table-list";
 pub const MONGO_DB_PLAYER_COLLECTION_NAME: &'static str = "stickbot.players";
 
 pub const AUTH_O_AUTH_URI_ENV: &'static str = "STICKBOT_AUTH_0_AUTH_URI";
@@ -26,3 +27,7 @@ pub const REDIS_PASSWORD_ENV: &'static str = "STICKBOT_REDIS_PASSWORD";
 
 pub const STICKBOT_BETS_QUEUE: &'static str = "stickbot:bets";
 pub const STICKBOT_BET_RESULTS: &'static str = "stickbot:bet_results";
+
+pub const EMPTY_RESPONSE: &'static str = "";
+
+pub const BOXBOT_DELAY_ENV: &'static str = "BOXBOT_WORKER_DELAY";

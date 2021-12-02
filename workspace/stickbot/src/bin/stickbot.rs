@@ -24,7 +24,8 @@ fn main() -> Result<()> {
     app.at("/auth/identify").get(stickbot::routes::auth::identify);
 
     app.at("/tables").get(stickbot::routes::tables::list);
-    app.at("/create-table").get(stickbot::routes::tables::create);
+    app.at("/tables").post(stickbot::routes::tables::create);
+    app.at("/table").get(stickbot::routes::tables::find);
 
     app.at("/leave-table").post(stickbot::routes::tables::leave);
     app.at("/join-table").post(stickbot::routes::tables::join);

@@ -1,10 +1,8 @@
 use serde::Deserialize;
 
-use crate::constants::{MONGO_DB_PLAYER_COLLECTION_NAME, MONGO_DB_TABLE_COLLECTION_NAME};
+use crate::constants::MONGO_DB_TABLE_COLLECTION_NAME;
 use crate::db;
 use crate::web::{cookie as get_cookie, Error, Request, Result};
-
-use bankah::TableState;
 
 #[derive(Debug, Deserialize)]
 struct BalanceQuery {
@@ -22,12 +20,11 @@ pub async fn set_balance(request: Request) -> Result {
   let query = request.query::<BalanceQuery>()?;
   log::info!("updating player '{}' balance to {}", player.id, query.amount);
 
-  let players = request
-    .state()
-    .collection::<bankah::PlayerState, _>(MONGO_DB_PLAYER_COLLECTION_NAME);
+  let players = request.state().players();
+
   players
     .update_one(
-      db::doc! { "id": player.id },
+      db::doc! { "id": player.id.to_string() },
       db::doc! { "$set": { "balance": query.amount } },
       None,
     )
@@ -41,9 +38,7 @@ pub async fn set_balance(request: Request) -> Result {
 }
 
 pub async fn drop_all(request: Request) -> Result {
-  let collection = request
-    .state()
-    .collection::<TableState, _>(MONGO_DB_TABLE_COLLECTION_NAME);
+  let collection = request.state().tables();
 
   collection
     .drop(None)

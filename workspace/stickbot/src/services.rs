@@ -43,15 +43,15 @@ impl Services {
     db.collection::<T>(name.as_ref())
   }
 
-  pub fn tables(&self) -> db::Collection<bankah::TableState> {
+  pub fn tables(&self) -> db::Collection<bankah::state::TableState> {
     self.collection(constants::MONGO_DB_TABLE_COLLECTION_NAME)
   }
 
-  pub fn players(&self) -> db::Collection<bankah::PlayerState> {
+  pub fn players(&self) -> db::Collection<bankah::state::PlayerState> {
     self.collection(constants::MONGO_DB_PLAYER_COLLECTION_NAME)
   }
 
-  pub async fn queue(&self, job: &bankah::TableJob) -> Result<String> {
+  pub async fn queue(&self, job: &bankah::jobs::TableJob) -> Result<uuid::Uuid> {
     let serialized = serde_json::to_string(&job).map_err(|error| {
       log::warn!("unable to serialize job - {}", error);
       Error::new(ErrorKind::Other, format!("{}", error))
@@ -71,8 +71,12 @@ impl Services {
     T: std::fmt::Display,
   {
     let claims = auth::Claims::decode(&token).ok()?;
-    let collection = self.collection::<bankah::PlayerState, _>(constants::MONGO_DB_PLAYER_COLLECTION_NAME);
-    log::debug!("decoded claims '{:?}', fetching user", claims);
+    let collection = self.players();
+
+    log::trace!("decoded claims '{:?}', fetching user", claims);
+
+    // TODO(player-id): the player id is serialized as a string when peristing into the players collection during the
+    // completion of the oauth flow.
     collection
       .find_one(db::doc! { "oid": claims.oid.clone(), "id": claims.id.clone() }, None)
       .await
@@ -96,7 +100,7 @@ impl Services {
     loop {
       let mut lock = self.redis.lock().await;
       let mut redis: &mut TcpStream = &mut lock;
-      log::debug!("attempting to send command to redis");
+      log::trace!("attempting to send command to redis - {}", command);
       let result = kramer::execute(&mut redis, command).await;
 
       if attempt > 10 {
@@ -116,7 +120,7 @@ impl Services {
       }
 
       if let Ok(response) = result {
-        log::debug!("redis command executed successfully - {:?}", response);
+        log::trace!("redis command executed successfully - {:?}", response);
         return Ok(response);
       }
     }

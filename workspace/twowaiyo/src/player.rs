@@ -1,15 +1,29 @@
 use uuid;
 
+use bankah::state::PlayerState;
+
 #[derive(Debug, Clone, Eq)]
 pub struct Player {
   pub id: uuid::Uuid,
   pub balance: u32,
 }
 
-impl From<&bankah::PlayerState> for Player {
-  fn from(state: &bankah::PlayerState) -> Self {
+impl From<&Player> for PlayerState {
+  fn from(state: &Player) -> PlayerState {
+    PlayerState {
+      id: state.id.clone(),
+      balance: state.balance,
+      emails: vec![],
+      nickname: String::default(),
+      oid: String::default(),
+    }
+  }
+}
+
+impl From<&PlayerState> for Player {
+  fn from(state: &PlayerState) -> Self {
     Player {
-      id: uuid::Uuid::parse_str(&state.id).unwrap_or_default(),
+      id: state.id.clone(),
       balance: state.balance,
     }
   }
@@ -18,6 +32,15 @@ impl From<&bankah::PlayerState> for Player {
 impl PartialEq for Player {
   fn eq(&self, other: &Self) -> bool {
     self.id == other.id
+  }
+}
+
+impl Player {
+  pub fn with_balance(balance: u32) -> Self {
+    Self {
+      balance,
+      ..Self::default()
+    }
   }
 }
 

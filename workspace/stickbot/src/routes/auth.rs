@@ -10,6 +10,7 @@ use crate::web::{cookie as get_cookie, Body, Error, Redirect, Request, Response,
 pub struct UserInfo {
   pub sub: String,
   pub nickname: String,
+  pub email: String,
   pub picture: String,
 }
 
@@ -87,6 +88,30 @@ async fn token_from_response(response: &mut surf::Response) -> Option<String> {
     .map(|body| body.access_token)
 }
 
+fn mkplayer(userinfo: &UserInfo) -> std::io::Result<db::bson::Document> {
+  let id = uuid::Uuid::new_v4();
+  let oid = userinfo.sub.clone();
+  let nickname = userinfo.nickname.clone();
+  let state = bankah::state::PlayerState {
+    id,
+    oid,
+    nickname,
+    balance: 10000,
+    emails: vec![userinfo.email.clone()],
+  };
+
+  bson::to_bson(&state)
+    .map(|serialized| {
+      log::debug!("serialized user state {:?}", serialized);
+      db::doc! { "$setOnInsert": serialized }
+    })
+    .map_err(|error| {
+      log::warn!("unable to generate serailized user info - {}", error);
+      std::io::Error::new(std::io::ErrorKind::Other, format!("{}", error))
+    })
+}
+
+// ## Route
 // Return our persisted player information from the token provided in our cookie.
 pub async fn identify(request: Request) -> Result {
   let cookie = get_cookie(&request).ok_or(Error::from_str(404, "no-session"))?;
@@ -98,34 +123,21 @@ pub async fn identify(request: Request) -> Result {
     .player()
     .ok_or(Error::from_str(404, "no-player"))?;
 
-  log::info!("loaded authority - {:?}", authority);
+  log::trace!("loaded authority - {:?}", authority);
 
   Body::from_json(&authority)
     .map(|body| Response::builder(200).body(body).build())
     .map_err(|error| {
       log::warn!("unable to serialize player authority - {}", error);
-      Error::from_str(500, "")
+      Error::from_str(500, "unable to serialized authority identity")
     })
 }
 
-fn mkplayer(userinfo: &UserInfo) -> db::bson::Document {
-  let id = uuid::Uuid::new_v4();
-  db::doc! {
-    "$setOnInsert": {
-      "id": id.to_string(),
-      "oid": userinfo.sub.clone(),
-      "nickname": userinfo.nickname.clone(),
-      "balance": 10000,
-    }
-  }
-}
-
+// ## Route
 // Complete the oAuth authentication. Here we are receiving a code sent from our oAuth provider in the url and
 // exchanging that for an authentication token. Assuming that goes well, we will either create or update the player
 // record in our data store.
 pub async fn complete(request: Request) -> Result {
-  log::info!("completing auth flow");
-
   let code = request
     .url()
     .query_pairs()
@@ -146,13 +158,11 @@ pub async fn complete(request: Request) -> Result {
 
   // With our token, attempt to load the user info.
   log::info!("created token, loading user info");
-  let user = fetch_user(&token).await.ok_or(Error::from_str(404, ""))?;
-  log::info!("user loaded - '{:?}', finding or creating record", user);
+  let user = fetch_user(&token).await.ok_or(Error::from_str(404, "user-not-found"))?;
+  log::info!("user loaded - oid: '{}'. finding or creating record", user.sub);
 
   // With our loaded user data, attempt to store a new record in our players collection.
-  let collection = request
-    .state()
-    .collection::<bankah::PlayerState, _>(constants::MONGO_DB_PLAYER_COLLECTION_NAME);
+  let collection = request.state().players();
 
   let options = db::FindOneAndUpdateOptions::builder()
     .upsert(true)
@@ -160,7 +170,7 @@ pub async fn complete(request: Request) -> Result {
     .build();
 
   let query = db::doc! { "oid": user.sub.clone() };
-  let updates = mkplayer(&user);
+  let updates = mkplayer(&user)?;
 
   let player = collection
     .find_one_and_update(query, updates, options)
@@ -173,7 +183,7 @@ pub async fn complete(request: Request) -> Result {
 
   log::info!("found record - {:?}, building token", player);
 
-  let jwt = auth::Claims::for_player(&user.sub, &player.id).encode()?;
+  let jwt = auth::Claims::for_player(&user.sub, &player.id.to_string()).encode()?;
 
   // With our player created, we're ready to store the token in our session and move along.
   let cookie = format!("{}={}; {}", constants::STICKBOT_COOKIE_NAME, jwt, COOKIE_FLAGS);
@@ -192,6 +202,7 @@ pub async fn complete(request: Request) -> Result {
   Ok(response)
 }
 
+// ## Route
 // Start the oAuth authentication flow. This is a straightforward redirect to the oAuth provider to queue a log in.
 pub async fn start(_: Request) -> Result {
   let client_id = std::env::var(constants::AUTH_O_CLIENT_ID_ENV).ok();

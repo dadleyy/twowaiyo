@@ -22,8 +22,8 @@ log = { version = "^0.4.1" }
 twowaiyo = { path =  "../twowaiyo" }
 bankah = { path =  "../bankah" }
 async-std = { version = "^1.5.0" }
-mongodb = { version = "^2.0.0", features = ["async-std-runtime"], default-features = false }
-bson = { version = "^2.0.0" }
+mongodb = { version = "^2.0.0", features = ["async-std-runtime", "bson-uuid-0_8"], default-features = false }
+bson = { version = "2.0.0", features = ["uuid-0_8"] }
 serde_json = { version = "1.0" }
 tide = { version = "^0.16.0" }
 serde = { version = "^1.0", features = ["derive"] }
@@ -33,3 +33,4 @@ surf = { version = "^2.3.0" }
 uuid = { version = "^0.8", features = ["v4"] }
 jsonwebtoken = { version = "^7.2.0" }
 kramer = { version = "^1.1.0", features = ["kramer-async"] }
+getrandom = { version = "^0.2" }

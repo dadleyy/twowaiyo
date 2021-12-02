@@ -8,10 +8,12 @@ use super::roll::Roll;
 use super::rollers::RandomRoller;
 use super::seat::{Seat, SeatRuns};
 
+use bankah::state::TableState;
+
 #[derive(Debug, Clone)]
 pub struct RunResult<R>
 where
-  R: Clone + Default + Iterator<Item = u8>,
+  R: Clone + Iterator<Item = u8>,
 {
   pub table: Table<R>,
   pub results: HashMap<uuid::Uuid, SeatRuns>,
@@ -20,7 +22,7 @@ where
 #[derive(Clone)]
 pub struct Table<R>
 where
-  R: Clone + Default + Iterator<Item = u8>,
+  R: Clone + Iterator<Item = u8>,
 {
   id: uuid::Uuid,
   roller: Option<uuid::Uuid>,
@@ -48,7 +50,7 @@ impl Default for Table<RandomRoller> {
 
 fn apply_bet<R>(mut table: Table<R>, player: &Player, bet: &Bet) -> Result<Table<R>, errors::CarryError<Table<R>>>
 where
-  R: Clone + Default + Iterator<Item = u8>,
+  R: Clone + Iterator<Item = u8>,
 {
   let seat = table
     .seats
@@ -63,7 +65,7 @@ where
 
 impl<R> Table<R>
 where
-  R: Clone + Default + Iterator<Item = u8>,
+  R: Clone + Iterator<Item = u8>,
 {
   pub fn with_dice(dice: R) -> Self {
     let Table {
@@ -212,7 +214,7 @@ where
 
 impl<R> std::fmt::Debug for Table<R>
 where
-  R: Clone + Default + Iterator<Item = u8>,
+  R: Clone + Iterator<Item = u8>,
 {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     writeln!(formatter, "table {}", self.id)?;
@@ -230,8 +232,17 @@ where
   }
 }
 
-impl From<&bankah::TableState> for Table<crate::rollers::RandomRoller> {
-  fn from(state: &bankah::TableState) -> Self {
+/* TODO: This code is implemented here with some uncertainty. The original intent was that `bankah` would contain the
+ * "schema" of the serialized forms provided by this (`twowaiyo`) library, effectively removing serde as a dependency
+ * of the library code and decoupling the engine itself from how it was peristed or "sent over the wire". Ultimately
+ * what exists now is very tight coupling where the library is actually responsible for translating itself into the
+ * structures that are prepared for handling serialization.
+ *
+ * It is likely that this would better belong in bankah, where that library is responsible for creating it's structures
+ * from what we have here, but that might mean making fields of these types public (`pub`), which is not ideal either.
+ */
+impl From<&TableState> for Table<crate::rollers::RandomRoller> {
+  fn from(state: &TableState) -> Self {
     let rolls = state
       .rolls
       .iter()
@@ -241,45 +252,37 @@ impl From<&bankah::TableState> for Table<crate::rollers::RandomRoller> {
     let seats = state
       .seats
       .iter()
-      .map(|(key, state)| (uuid::Uuid::parse_str(&key).unwrap_or_default(), state.into()))
+      .map(|(key, state)| (key.clone(), state.into()))
       .collect();
 
-    let roller = state
-      .roller
-      .as_ref()
-      .map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default());
+    let roller = state.roller.as_ref().map(|id| id.clone());
 
     Table {
       rolls,
       roller,
       seats,
-      id: uuid::Uuid::parse_str(&state.id).unwrap_or_default(),
+      id: state.id.clone(),
       button: state.button,
       dice: RandomRoller::default(),
     }
   }
 }
 
-impl<R> From<&Table<R>> for bankah::TableState
+impl<R> From<&Table<R>> for TableState
 where
-  R: Clone + Default + Iterator<Item = u8>,
+  R: Clone + Iterator<Item = u8>,
 {
-  fn from(table: &Table<R>) -> bankah::TableState {
-    let seats = table
-      .seats
-      .iter()
-      .map(|(id, seat)| (id.to_string(), seat.into()))
-      .collect();
+  fn from(table: &Table<R>) -> TableState {
+    let seats = table.seats.iter().map(|(id, seat)| (id.clone(), seat.into())).collect();
+    let def = TableState::default();
 
-    bankah::TableState {
+    TableState {
       seats,
-      id: table.identifier(),
+      id: table.id.clone(),
       button: table.button.clone(),
-      roller: table.roller.map(|id| id.to_string()),
+      roller: table.roller.clone(),
       rolls: table.rolls.iter().map(|roll| roll.into()).collect(),
-
-      // TODO: the nonce is only represented in the stored data of a table; not the game state/logic itself.
-      nonce: String::new(),
+      ..def
     }
   }
 }
@@ -349,6 +352,21 @@ mod tests {
     let mut player = Player::default();
     let table = Table::default().sit(&mut roller).sit(&mut player);
     assert_eq!(table.roller, Some(roller.id.clone()));
+  }
+
+  #[test]
+  fn test_stand_with_leftover_bets() {
+    let mut player = Player::default();
+    player.balance = 200;
+    let table = Table::with_dice(TestDice::from((2, 2)))
+      .sit(&mut player)
+      .bet(&player, &Bet::start_pass(100))
+      .unwrap();
+    assert_eq!(player.balance, 0);
+    let table = table.roll().table.stand(&mut player);
+    assert_eq!(player.balance, 100);
+    let seat = table.seats.get(&player.id);
+    assert_eq!(seat.is_some(), true);
   }
 
   #[test]

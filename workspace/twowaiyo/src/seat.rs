@@ -4,10 +4,24 @@ use super::{
   roll::Roll,
 };
 
+use bankah::state::SeatState;
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SeatRuns {
   wins: Vec<(Bet, u32)>,
   losses: Vec<(Bet, u32)>,
+}
+
+impl Iterator for &mut SeatRuns {
+  type Item = (Bet, bool, u32);
+
+  fn next(&mut self) -> Option<Self::Item> {
+    self
+      .wins
+      .pop()
+      .map(|(bet, amount)| (bet, true, amount))
+      .or_else(|| self.losses.pop().map(|(bet, amount)| (bet, false, amount)))
+  }
 }
 
 impl SeatRuns {
@@ -26,8 +40,8 @@ pub struct Seat {
   balance: u32,
 }
 
-impl From<&bankah::SeatState> for Seat {
-  fn from(seat: &bankah::SeatState) -> Seat {
+impl From<&SeatState> for Seat {
+  fn from(seat: &SeatState) -> Seat {
     let bets = seat.bets.iter().map(|b| b.into()).collect();
 
     Seat {
@@ -37,11 +51,14 @@ impl From<&bankah::SeatState> for Seat {
   }
 }
 
-impl From<&Seat> for bankah::SeatState {
-  fn from(seat: &Seat) -> bankah::SeatState {
-    bankah::SeatState {
+impl From<&Seat> for SeatState {
+  fn from(seat: &Seat) -> SeatState {
+    let def = SeatState::default();
+
+    SeatState {
       balance: seat.balance,
       bets: seat.bets.iter().map(|b| b.into()).collect(),
+      ..def
     }
   }
 }

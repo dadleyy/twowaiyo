@@ -8,11 +8,11 @@ use crate::constants;
 
 #[derive(Debug)]
 pub enum Authority {
-  Player(bankah::PlayerState),
+  Player(bankah::state::PlayerState),
 }
 
 impl Authority {
-  pub fn player(self) -> Option<bankah::PlayerState> {
+  pub fn player(self) -> Option<bankah::state::PlayerState> {
     match self {
       Authority::Player(player) => Some(player),
     }

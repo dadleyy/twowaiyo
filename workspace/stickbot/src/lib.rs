@@ -1,5 +1,6 @@
 mod auth;
 mod db;
+mod names;
 mod services;
 mod web;
 

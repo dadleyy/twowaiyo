@@ -11,7 +11,7 @@ pub struct JobLookupQuery {
 #[derive(Debug, Serialize)]
 pub struct JobLookupResponse {
   id: String,
-  output: Option<bankah::TableJobOutput>,
+  output: Option<bankah::jobs::TableJobOutput>,
 }
 
 pub async fn find(request: Request) -> Result {
@@ -55,7 +55,7 @@ pub async fn find(request: Request) -> Result {
 
   log::debug!("response from result lookup - {:?}", payload);
 
-  let parsed = serde_json::from_str::<bankah::TableJobOutput>(&payload).map_err(|error| {
+  let parsed = serde_json::from_str::<bankah::jobs::TableJobOutput>(&payload).map_err(|error| {
     log::warn!("unable to parse job output - {}", error);
     Error::from_str(500, "bad-parse")
   })?;

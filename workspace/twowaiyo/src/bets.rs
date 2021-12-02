@@ -1,5 +1,7 @@
 use super::roll::{Hardway, Roll};
 
+use bankah::state::{BetState, RaceType, TargetKind};
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum BetResult<T> {
   Noop(T),
@@ -92,42 +94,42 @@ pub enum Bet {
   Hardway(u32, Hardway),
 }
 
-impl From<&bankah::BetState> for Bet {
-  fn from(state: &bankah::BetState) -> Bet {
+impl From<&BetState> for Bet {
+  fn from(state: &BetState) -> Bet {
     match state {
-      bankah::BetState::Target(kind, amount, target) => match kind {
-        bankah::TargetKind::ComeOdds => Bet::ComeOdds(*amount, *target),
-        bankah::TargetKind::PassOdds => Bet::PassOdds(*amount, *target),
-        bankah::TargetKind::Place => Bet::Place(*amount, *target),
-        bankah::TargetKind::Hardway => Bet::Hardway(*amount, target.into()),
+      BetState::Target(kind, amount, target) => match kind {
+        TargetKind::ComeOdds => Bet::ComeOdds(*amount, *target),
+        TargetKind::PassOdds => Bet::PassOdds(*amount, *target),
+        TargetKind::Place => Bet::Place(*amount, *target),
+        TargetKind::Hardway => Bet::Hardway(*amount, target.into()),
       },
 
-      bankah::BetState::Race(kind, amount, target) => match kind {
-        bankah::RaceType::Pass => Bet::Pass(RaceBet {
+      BetState::Race(kind, amount, target) => match kind {
+        RaceType::Pass => Bet::Pass(RaceBet {
           amount: *amount,
           target: target.clone(),
         }),
-        bankah::RaceType::Come => Bet::Come(RaceBet {
+        RaceType::Come => Bet::Come(RaceBet {
           amount: *amount,
           target: target.clone(),
         }),
       },
 
-      bankah::BetState::Field(amount) => Bet::Field(*amount),
+      BetState::Field(amount) => Bet::Field(*amount),
     }
   }
 }
 
-impl From<&Bet> for bankah::BetState {
-  fn from(bet: &Bet) -> bankah::BetState {
+impl From<&Bet> for BetState {
+  fn from(bet: &Bet) -> BetState {
     match bet {
-      Bet::Pass(race) => bankah::BetState::Race(bankah::RaceType::Pass, race.amount, race.target),
-      Bet::PassOdds(amount, target) => bankah::BetState::Target(bankah::TargetKind::PassOdds, *amount, *target),
-      Bet::Come(race) => bankah::BetState::Race(bankah::RaceType::Come, race.amount, race.target),
-      Bet::ComeOdds(amount, target) => bankah::BetState::Target(bankah::TargetKind::ComeOdds, *amount, *target),
-      Bet::Place(amount, target) => bankah::BetState::Target(bankah::TargetKind::Place, *amount, *target),
-      Bet::Hardway(amount, target) => bankah::BetState::Target(bankah::TargetKind::Hardway, *amount, target.into()),
-      Bet::Field(amount) => bankah::BetState::Field(*amount),
+      Bet::Pass(race) => BetState::Race(RaceType::Pass, race.amount, race.target),
+      Bet::PassOdds(amount, target) => BetState::Target(TargetKind::PassOdds, *amount, *target),
+      Bet::Come(race) => BetState::Race(RaceType::Come, race.amount, race.target),
+      Bet::ComeOdds(amount, target) => BetState::Target(TargetKind::ComeOdds, *amount, *target),
+      Bet::Place(amount, target) => BetState::Target(TargetKind::Place, *amount, *target),
+      Bet::Hardway(amount, target) => BetState::Target(TargetKind::Hardway, *amount, target.into()),
+      Bet::Field(amount) => BetState::Field(*amount),
     }
   }
 }
