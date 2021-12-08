@@ -28,6 +28,7 @@ jobs:
         env:
           MACHINE: armv7
           ARCH: arm
+          CC: arm-linux-gnueabihf-gcc
       - name: Build openssl
         run: cd /tmp/openssl-1.1.1g && make
         env:
