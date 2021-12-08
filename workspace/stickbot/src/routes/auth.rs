@@ -190,7 +190,10 @@ pub async fn complete(request: Request) -> Result {
 
   let destination = std::env::var(constants::STICKBOT_ONCORE_URL_ENV)
     .ok()
-    .unwrap_or("/auth/identify".into());
+    .unwrap_or_else(|| {
+      log::warn!("missing stickbot oncore url environment variable");
+      "/auth/identify".into()
+    });
 
   // TODO - determine where to send the user. Once the web UI is created, we will send the user to some login page
   // where an attempt will be made to fetch identity information using the newly-set cookie.
