@@ -25,6 +25,7 @@ pub const REDIS_HOSTNAME_ENV: &'static str = "STICKBOT_REDIS_HOSTNAME";
 pub const REDIS_PORT_ENV: &'static str = "STICKBOT_REDIS_PORT";
 pub const REDIS_PASSWORD_ENV: &'static str = "STICKBOT_REDIS_PASSWORD";
 
+pub const STICKBOT_SESSION_STORE: &'static str = "stickbot:sessions";
 pub const STICKBOT_JOB_QUEUE: &'static str = "stickbot:jobs";
 pub const STICKBOT_JOB_RESULTS: &'static str = "stickbot:job_results";
 

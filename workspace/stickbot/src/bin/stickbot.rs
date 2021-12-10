@@ -20,6 +20,7 @@ fn main() -> Result<()> {
     app.at("/heartbeat").get(stickbot::routes::heartbeat);
 
     app.at("/auth/start").get(stickbot::routes::auth::start);
+    app.at("/auth/logout").get(stickbot::routes::auth::logout);
     app.at("/auth/complete").get(stickbot::routes::auth::complete);
     app.at("/auth/identify").get(stickbot::routes::auth::identify);
 
