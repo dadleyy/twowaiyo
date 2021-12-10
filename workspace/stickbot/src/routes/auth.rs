@@ -225,7 +225,7 @@ pub async fn logout(request: Request) -> Result {
     kramer::Arity::One(cookie.value()),
   ));
 
-  log::info!("removing session - {:?}", cmd);
+  log::trace!("removing session - {}", cmd);
 
   request
     .state()
