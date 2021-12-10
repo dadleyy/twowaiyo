@@ -48,7 +48,7 @@ impl Default for SeatState {
 pub struct TableIndexState {
   pub id: uuid::Uuid,
   pub name: String,
-  // pub population: u32,
+  pub population: Vec<(String, String)>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

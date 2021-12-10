@@ -289,7 +289,10 @@ pub async fn create(request: Request) -> Result {
 // ## Route
 // Leave table.
 pub async fn leave(mut request: Request) -> Result {
-  let query = request.body_json::<TableActionPayload>().await?;
+  let query = request.body_json::<TableActionPayload>().await.map_err(|error| {
+    log::warn!("invalid table exit payload - {}", error);
+    error
+  })?;
   let cookie = get_cookie(&request).ok_or(Error::from_str(404, "unauth"))?;
   let player = request
     .state()
