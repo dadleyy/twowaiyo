@@ -23,9 +23,15 @@ pub struct JobWapper<T> {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub enum TableAdminJob {
+  ReindexPopulations,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum TableJob {
   Bet(JobWapper<BetJob>),
   Roll(JobWapper<RollJob>),
+  Admin(JobWapper<TableAdminJob>),
 }
 
 impl TableJob {
@@ -33,6 +39,7 @@ impl TableJob {
     match self {
       TableJob::Bet(inner) => inner.id.clone(),
       TableJob::Roll(inner) => inner.id.clone(),
+      TableJob::Admin(inner) => inner.id.clone(),
     }
   }
 
@@ -44,6 +51,15 @@ impl TableJob {
       })),
       _ => None,
     }
+  }
+
+  pub fn reindex() -> Self {
+    let id = uuid::Uuid::new_v4();
+    TableJob::Admin(JobWapper {
+      job: TableAdminJob::ReindexPopulations,
+      id,
+      attempts: 0,
+    })
   }
 
   pub fn roll(table: uuid::Uuid, version: uuid::Uuid) -> Self {
@@ -80,6 +96,7 @@ pub enum TableJobOutput {
   BetFailed(BetFailureReason),
   RollProcessed,
   RollStale,
+  AdminOk,
 }
 
 #[derive(Debug, Serialize)]

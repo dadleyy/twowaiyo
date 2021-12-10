@@ -8,7 +8,7 @@ use bankah::jobs::TableJob;
 const POP_CMD: kramer::Command<&'static str, &'static str> =
   kramer::Command::List::<_, &str>(kramer::ListCommand::Pop(
     kramer::Side::Left,
-    stickbot::constants::STICKBOT_BETS_QUEUE,
+    stickbot::constants::STICKBOT_JOB_QUEUE,
     Some((None, 3)),
   ));
 
@@ -60,12 +60,11 @@ async fn work(services: &stickbot::Services) -> Result<()> {
 
   log::debug!("deserialized job from queue - {:?}", job);
 
-  let (id, result) = match &job {
-    bankah::jobs::TableJob::Bet(inner) => (inner.id.clone(), stickbot::processors::bet(&services, &inner.job).await),
-    bankah::jobs::TableJob::Roll(inner) => (
-      inner.id.clone(),
-      stickbot::processors::roll(&services, &inner.job).await,
-    ),
+  let id = job.id();
+  let result = match &job {
+    TableJob::Admin(inner) => stickbot::processors::admin::reindex(&services, &inner.job).await,
+    TableJob::Bet(inner) => stickbot::processors::bet(&services, &inner.job).await,
+    TableJob::Roll(inner) => stickbot::processors::roll(&services, &inner.job).await,
   };
 
   // Processors will return a Result<E, T>, where `E` can either represent a "fatal" error that is non-retryable or
@@ -82,7 +81,7 @@ async fn work(services: &stickbot::Services) -> Result<()> {
       // api route to push bet jobs onto our queue.
       let command = kramer::Command::List(kramer::ListCommand::Push(
         (kramer::Side::Right, kramer::Insertion::Always),
-        stickbot::constants::STICKBOT_BETS_QUEUE,
+        stickbot::constants::STICKBOT_JOB_RESULTS,
         kramer::Arity::One(serialized),
       ));
 
@@ -97,7 +96,7 @@ async fn work(services: &stickbot::Services) -> Result<()> {
 
   // Insert into our results hash the output from the processor.
   let sets = kramer::Command::Hashes(kramer::HashCommand::Set(
-    stickbot::constants::STICKBOT_BET_RESULTS,
+    stickbot::constants::STICKBOT_JOB_RESULTS,
     kramer::Arity::One((&sid, output.as_str())),
     kramer::Insertion::Always,
   ));

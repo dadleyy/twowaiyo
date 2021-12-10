@@ -45,6 +45,13 @@ impl Default for SeatState {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct TableIndexState {
+  pub id: uuid::Uuid,
+  pub name: String,
+  // pub population: u32,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct TableState {
   pub id: uuid::Uuid,
   pub name: String,

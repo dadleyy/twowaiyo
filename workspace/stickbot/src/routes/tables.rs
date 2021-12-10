@@ -80,23 +80,26 @@ pub async fn list(request: Request) -> Result {
     .ok_or(Error::from_str(404, ""))?;
 
   log::trace!("listing tables for '{:?}'", player);
-  let collection = request.state().tables();
+  let collection = request.state().table_index();
 
   let mut tables = collection.find(None, None).await.map_err(|error| {
     log::warn!("unable to query tables - {}", error);
     Error::from_str(500, "load-tables")
   })?;
 
-  let mut page: Vec<TableState> = Vec::with_capacity(10);
+  let mut page = Vec::with_capacity(10);
 
   while let Some(doc) = tables.next().await {
     if let Ok(state) = doc {
       page.push(state)
     }
+
+    if page.len() >= 10 {
+      break;
+    }
   }
 
-  let body = Body::from_json(&page)?;
-  Ok(Response::builder(200).body(body).build())
+  Body::from_json(&page).map(|body| Response::builder(200).body(body).build())
 }
 
 #[derive(Debug, Deserialize)]
@@ -201,11 +204,17 @@ pub async fn join(mut request: Request) -> Result {
     .map_err(|error| {
       log::warn!("unable to create new table - {:?}", error);
       Error::from_str(422, "failed")
-    })
-    .and_then(|_r| {
-      log::info!("player joined table '{}'", ts.id);
-      Body::from_json(&ts).map(|body| Response::builder(200).body(body).build())
-    })
+    })?;
+
+  // TODO: do we care if our attempt to enqueue a job fails from the web thread?
+  let job = bankah::jobs::TableJob::reindex();
+  request.state().queue(&job).await.map(|_| ()).unwrap_or_else(|error| {
+    log::warn!("unable to queue indexing job - {}", error);
+    ()
+  });
+
+  log::info!("player joined table '{}'", ts.id);
+  Body::from_json(&ts).map(|body| Response::builder(200).body(body).build())
 }
 
 // ## Route
@@ -264,22 +273,12 @@ pub async fn create(request: Request) -> Result {
       Error::from_str(422, "failed")
     });
 
-  let pipeline = vec![
-    doc! { "$project": { "id": 1, "name": 1, "seats": { "$objectToArray": "$seats" } } },
-    doc! { "$project": { "id": 1, "population": {
-      "$reduce": {
-        "input": "$seats",
-        "initialValue": 0,
-        "in": {
-          "$add": ["$$value", 1]
-        }
-      },
-    } } },
-    doc! { "$merge": { "into": crate::constants::MONGO_DB_TABLE_LIST_COLLECTION_NAME } },
-  ];
-  let agg = tables.aggregate(pipeline, None).await.map(|_| String::from("ok"));
-
-  log::warn!("aggregate result - {:?}", agg);
+  // TODO: do we care if our attempt to enqueue a job fails from the web thread?
+  let job = bankah::jobs::TableJob::reindex();
+  request.state().queue(&job).await.map(|_| ()).unwrap_or_else(|error| {
+    log::warn!("unable to queue indexing job - {}", error);
+    ()
+  });
 
   result.and_then(|_r| {
     log::info!("new table created - '{}'", ts.id);
@@ -342,6 +341,21 @@ pub async fn leave(mut request: Request) -> Result {
     })?;
 
   log::trace!("player '{}' finished leaving", ps.id);
+
+  // TODO: do we care if our attempt to enqueue a job fails from the web thread?
+  let job = bankah::jobs::TableJob::reindex();
+  request
+    .state()
+    .queue(&job)
+    .await
+    .map(|_| {
+      log::debug!("successfully queued indexing job");
+      ()
+    })
+    .unwrap_or_else(|error| {
+      log::warn!("unable to queue indexing job - {}", error);
+      ()
+    });
 
   Body::from_json(&ts).map(|body| Response::builder(200).body(body).build())
 }
