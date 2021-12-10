@@ -27,7 +27,7 @@ pub async fn find(request: Request) -> Result {
   log::debug!("player '{}' checking on job '{}'", player.id, query.id);
 
   let command = kramer::Command::Hashes(kramer::HashCommand::Get::<_, &str>(
-    constants::STICKBOT_BET_RESULTS,
+    constants::STICKBOT_JOB_RESULTS,
     Some(kramer::Arity::One(query.id.as_str())),
   ));
 

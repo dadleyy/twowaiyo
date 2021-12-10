@@ -43,6 +43,10 @@ impl Services {
     db.collection::<T>(name.as_ref())
   }
 
+  pub fn table_index(&self) -> db::Collection<bankah::state::TableIndexState> {
+    self.collection(constants::MONGO_DB_TABLE_LIST_COLLECTION_NAME)
+  }
+
   pub fn tables(&self) -> db::Collection<bankah::state::TableState> {
     self.collection(constants::MONGO_DB_TABLE_COLLECTION_NAME)
   }
@@ -59,7 +63,7 @@ impl Services {
 
     let command = kramer::Command::List(kramer::ListCommand::Push(
       (kramer::Side::Right, kramer::Insertion::Always),
-      constants::STICKBOT_BETS_QUEUE,
+      constants::STICKBOT_JOB_QUEUE,
       kramer::Arity::One(serialized),
     ));
 
