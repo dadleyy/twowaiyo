@@ -6,6 +6,9 @@ use crate::constants;
 use crate::db;
 use crate::web::{cookie as get_cookie, Body, Error, Redirect, Request, Response, Result, Url};
 
+const COOKIE_FLAGS: &'static str = "Max-Age: 600; Path=/; SameSite=Strict; HttpOnly";
+const COOKIE_CLEAR_FLAGS: &'static str = "Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; SameSite=Strict; HttpOnly";
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UserInfo {
   pub sub: String,
@@ -67,8 +70,6 @@ impl Default for AuthCodeRequest {
     }
   }
 }
-
-const COOKIE_FLAGS: &'static str = "Max-Age: 600; Path=/; SameSite=Strict; HttpOnly";
 
 async fn token_from_response(response: &mut surf::Response) -> Option<String> {
   let status = response.status();
@@ -195,6 +196,17 @@ pub async fn complete(request: Request) -> Result {
       "/auth/identify".into()
     });
 
+  let cmd = kramer::Command::Hashes(kramer::HashCommand::Set(
+    constants::STICKBOT_SESSION_STORE,
+    kramer::Arity::One((&jwt, player.id.to_string())),
+    kramer::Insertion::Always,
+  ));
+
+  request.state().command(&cmd).await.map_err(|error| {
+    log::warn!("unable to persist tokent to session store - {}", error);
+    error
+  })?;
+
   // TODO - determine where to send the user. Once the web UI is created, we will send the user to some login page
   // where an attempt will be made to fetch identity information using the newly-set cookie.
   let response = Response::builder(302)
@@ -202,6 +214,43 @@ pub async fn complete(request: Request) -> Result {
     .header("Location", destination.as_str())
     .build();
 
+  Ok(response)
+}
+
+pub async fn logout(request: Request) -> Result {
+  let cookie = get_cookie(&request).ok_or(Error::from_str(404, "no-session"))?;
+
+  let cmd = kramer::Command::Hashes::<&str, &str>(kramer::HashCommand::Del(
+    constants::STICKBOT_SESSION_STORE,
+    kramer::Arity::One(cookie.value()),
+  ));
+
+  log::info!("removing session - {:?}", cmd);
+
+  request
+    .state()
+    .command(&cmd)
+    .await
+    .map_err(|error| {
+      log::warn!("unable to clear session - {}", error);
+      error
+    })
+    .map(|result| {
+      log::trace!("session clear result - {:?}", result);
+    })?;
+
+  let destination = std::env::var(constants::STICKBOT_ONCORE_URL_ENV)
+    .ok()
+    .unwrap_or_else(|| {
+      log::warn!("missing stickbot oncore url environment variable");
+      "/auth/identify".into()
+    });
+
+  let cookie = format!("{}=deleted; {}", constants::STICKBOT_COOKIE_NAME, COOKIE_CLEAR_FLAGS);
+  let response = Response::builder(302)
+    .header("Set-Cookie", cookie)
+    .header("Location", destination.as_str())
+    .build();
   Ok(response)
 }
 

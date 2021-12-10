@@ -74,6 +74,21 @@ impl Services {
   where
     T: std::fmt::Display,
   {
+    let token = format!("{}", token);
+    let cmd = kramer::Command::Hashes::<&str, &str>(kramer::HashCommand::Get(
+      constants::STICKBOT_SESSION_STORE,
+      Some(kramer::Arity::One(&token)),
+    ));
+
+    // TODO: should the storage value be used? is a hash the right move here?
+    match self.command(&cmd).await.ok()? {
+      kramer::Response::Item(kramer::ResponseValue::String(inner)) => Some(inner),
+      other => {
+        log::trace!("session-store lookup missing or invalid - {:?}", other);
+        None
+      }
+    }?;
+
     let claims = auth::Claims::decode(&token).ok()?;
     let collection = self.players();
 
