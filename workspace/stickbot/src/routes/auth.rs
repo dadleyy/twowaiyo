@@ -6,7 +6,12 @@ use crate::constants;
 use crate::db;
 use crate::web::{cookie as get_cookie, Body, Error, Redirect, Request, Response, Result, Url};
 
-const COOKIE_FLAGS: &'static str = "Max-Age: 600; Path=/; SameSite=Strict; HttpOnly";
+#[cfg(debug_assertions)]
+const COOKIE_SET_FLAGS: &'static str = "Max-Age=600; Path=/; SameSite=Strict; HttpOnly";
+
+#[cfg(not(debug_assertions))]
+const COOKIE_SET_FLAGS: &'static str = "Max-Age=600; Path=/; SameSite=Strict; HttpOnly; Secure";
+
 const COOKIE_CLEAR_FLAGS: &'static str = "Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; SameSite=Strict; HttpOnly";
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -186,16 +191,6 @@ pub async fn complete(request: Request) -> Result {
 
   let jwt = auth::Claims::for_player(&user.sub, &player.id.to_string()).encode()?;
 
-  // With our player created, we're ready to store the token in our session and move along.
-  let cookie = format!("{}={}; {}", constants::STICKBOT_COOKIE_NAME, jwt, COOKIE_FLAGS);
-
-  let destination = std::env::var(constants::STICKBOT_ONCORE_URL_ENV)
-    .ok()
-    .unwrap_or_else(|| {
-      log::warn!("missing stickbot oncore url environment variable");
-      "/auth/identify".into()
-    });
-
   let cmd = kramer::Command::Hashes(kramer::HashCommand::Set(
     constants::STICKBOT_SESSION_STORE,
     kramer::Arity::One((&jwt, player.id.to_string())),
@@ -206,6 +201,17 @@ pub async fn complete(request: Request) -> Result {
     log::warn!("unable to persist tokent to session store - {}", error);
     error
   })?;
+
+  // With our player created, we're ready to store the token in our session and move along.
+  let cookie = format!("{}={}; {}", constants::STICKBOT_COOKIE_NAME, jwt, COOKIE_SET_FLAGS);
+  log::debug!("cookie string - '{}'", cookie);
+
+  let destination = std::env::var(constants::STICKBOT_ONCORE_URL_ENV)
+    .ok()
+    .unwrap_or_else(|| {
+      log::warn!("missing stickbot oncore url environment variable");
+      "/auth/identify".into()
+    });
 
   // TODO - determine where to send the user. Once the web UI is created, we will send the user to some login page
   // where an attempt will be made to fetch identity information using the newly-set cookie.
