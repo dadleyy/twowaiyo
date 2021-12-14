@@ -7,6 +7,7 @@ use crate::web::{cookie as get_cookie, Error, Request, Result};
 #[derive(Debug, Deserialize)]
 struct BalanceQuery {
   amount: u32,
+  player: String,
 }
 
 pub async fn set_balance(request: Request) -> Result {
@@ -15,16 +16,22 @@ pub async fn set_balance(request: Request) -> Result {
     .state()
     .authority(cook.value())
     .await
-    .and_then(|auth| auth.player())
+    .and_then(|auth| auth.admin())
     .ok_or(Error::from_str(404, ""))?;
+
   let query = request.query::<BalanceQuery>()?;
-  log::info!("updating player '{}' balance to {}", player.id, query.amount);
+  log::info!(
+    "admin {} updating player '{}' balance to {}",
+    player.id,
+    query.player,
+    query.amount
+  );
 
   let players = request.state().players();
 
   players
     .update_one(
-      db::doc! { "id": player.id.to_string() },
+      db::doc! { "id": query.player },
       db::doc! { "$set": { "balance": query.amount } },
       None,
     )
@@ -38,6 +45,16 @@ pub async fn set_balance(request: Request) -> Result {
 }
 
 pub async fn drop_all(request: Request) -> Result {
+  let cook = get_cookie(&request).ok_or(Error::from_str(404, "unauth"))?;
+  let player = request
+    .state()
+    .authority(cook.value())
+    .await
+    .and_then(|auth| auth.admin())
+    .ok_or(Error::from_str(404, ""))?;
+
+  log::info!("admin {} dropping all tables", player.id);
+
   let collection = request.state().tables();
 
   collection
