@@ -38,6 +38,10 @@ pub async fn create(mut request: Request) -> Result {
     return Err(Error::from_str(404, "not-found"));
   }
 
+  if table.nonce != payload.nonce {
+    return Err(Error::from_str(422, "bad-nonce"));
+  }
+
   // Update the nonce/version of the table before submitting our job.
   let nonce = uuid::Uuid::new_v4();
   let next = bankah::state::TableState {

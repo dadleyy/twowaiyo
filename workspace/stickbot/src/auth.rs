@@ -8,13 +8,22 @@ use crate::constants;
 
 #[derive(Debug)]
 pub enum Authority {
+  Admin(bankah::state::PlayerState),
   Player(bankah::state::PlayerState),
 }
 
 impl Authority {
+  pub fn admin(self) -> Option<bankah::state::PlayerState> {
+    match self {
+      Authority::Player(_) => None,
+      Authority::Admin(player) => Some(player),
+    }
+  }
+
   pub fn player(self) -> Option<bankah::state::PlayerState> {
     match self {
       Authority::Player(player) => Some(player),
+      Authority::Admin(player) => Some(player),
     }
   }
 }
@@ -51,7 +60,8 @@ impl Claims {
       .checked_add_signed(chrono::Duration::minutes(60))
       .unwrap_or(chrono::Utc::now());
 
-    let exp = day.timestamp_millis() as usize;
+    let exp = day.timestamp() as usize;
+    log::debug!("encoding new jwt, expires {}", exp);
 
     Self {
       exp,

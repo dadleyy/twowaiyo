@@ -32,3 +32,5 @@ pub const STICKBOT_JOB_RESULTS: &'static str = "stickbot:job_results";
 pub const EMPTY_RESPONSE: &'static str = "";
 
 pub const BOXBOT_DELAY_ENV: &'static str = "BOXBOT_WORKER_DELAY";
+
+pub const STICKBOT_ADMIN_EMAILS_ENV: &'static str = "STICKBOT_ADMIN_EMAILS";

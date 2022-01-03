@@ -91,8 +91,9 @@ impl Services {
 
     let claims = auth::Claims::decode(&token).ok()?;
     let collection = self.players();
+    let admins = std::env::var(constants::STICKBOT_ADMIN_EMAILS_ENV).unwrap_or_default();
 
-    log::trace!("decoded claims '{:?}', fetching user", claims);
+    log::trace!("decoded claims '{:?}', fetching user (admins {})", claims, admins);
 
     // TODO(player-id): the player id is serialized as a string when peristing into the players collection during the
     // completion of the oauth flow.
@@ -100,7 +101,13 @@ impl Services {
       .find_one(db::doc! { "oid": claims.oid.clone(), "id": claims.id.clone() }, None)
       .await
       .ok()
-      .and_then(|maybe_player| maybe_player.map(|player| auth::Authority::Player(player)))
+      .and_then(|maybe_player| maybe_player)
+      .map(
+        |player| match player.emails.iter().find(|e| e.as_str() == admins.as_str()) {
+          Some(_) => auth::Authority::Admin(player),
+          None => auth::Authority::Player(player),
+        },
+      )
   }
 
   pub async fn command<S, V>(&self, command: &kramer::Command<S, V>) -> Result<kramer::Response>

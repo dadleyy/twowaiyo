@@ -28,6 +28,8 @@ fn main() -> Result<()> {
     app.at("/tables").post(stickbot::routes::tables::create);
     app.at("/table").get(stickbot::routes::tables::find);
 
+    app.at("/delete-account").post(stickbot::routes::account::delete);
+
     app.at("/leave-table").post(stickbot::routes::tables::leave);
     app.at("/join-table").post(stickbot::routes::tables::join);
 
