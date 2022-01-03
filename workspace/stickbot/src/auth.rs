@@ -60,7 +60,8 @@ impl Claims {
       .checked_add_signed(chrono::Duration::minutes(60))
       .unwrap_or(chrono::Utc::now());
 
-    let exp = day.timestamp_millis() as usize;
+    let exp = day.timestamp() as usize;
+    log::debug!("encoding new jwt, expires {}", exp);
 
     Self {
       exp,
