@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use stickbot;
 
-use bankah::jobs::TableJob;
+use bankah::jobs::{TableAdminJob, TableJob};
 
 const POP_CMD: kramer::Command<&'static str, &'static str> =
   kramer::Command::List::<_, &str>(kramer::ListCommand::Pop(
@@ -62,7 +62,10 @@ async fn work(services: &stickbot::Services) -> Result<()> {
 
   let id = job.id();
   let result = match &job {
-    TableJob::Admin(inner) => stickbot::processors::admin::reindex(&services, &inner.job).await,
+    TableJob::Admin(inner) => match &inner.job {
+      TableAdminJob::ReindexPopulations => stickbot::processors::admin::reindex(&services, &inner.job).await,
+      TableAdminJob::CleanupPlayerData(id) => stickbot::processors::admin::cleanup(&services, &id).await,
+    },
     TableJob::Bet(inner) => stickbot::processors::bet(&services, &inner.job).await,
     TableJob::Roll(inner) => stickbot::processors::roll(&services, &inner.job).await,
   };
