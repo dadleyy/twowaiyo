@@ -104,6 +104,7 @@ fn mkplayer(userinfo: &UserInfo) -> std::io::Result<db::bson::Document> {
     nickname,
     balance: 10000,
     emails: vec![userinfo.email.clone()],
+    tables: vec![],
   };
 
   bson::to_bson(&state)

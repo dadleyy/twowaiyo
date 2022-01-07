@@ -2,11 +2,20 @@ use async_std::stream::StreamExt;
 use serde::Deserialize;
 
 use crate::db::{doc, FindOneAndReplaceOptions, FindOneAndUpdateOptions, ReturnDocument};
-use crate::names;
 use crate::web::{cookie as get_cookie, Body, Error, Request, Response, Result};
+use crate::{constants, names};
 
 use bankah::state::{PlayerState, TableState};
 use twowaiyo::{Player, Table};
+
+fn can_join(ps: &PlayerState) -> bool {
+  let max = std::env::var(constants::STICKBOT_MAX_ACTIVE_TABLES_PER_PLAYER_ENV)
+    .ok()
+    .and_then(|v| v.parse::<usize>().ok())
+    .unwrap_or(constants::STICKBOT_DEFAULT_MAX_ACTIVE_TABLES_PER_PLAYER);
+
+  return ps.tables.len() < max;
+}
 
 // During conversion between our `twowaiyo` engine types, sever fields will be lost that need to be updated with the
 // correct state.
@@ -17,6 +26,9 @@ fn sit_player(mut ts: TableState, mut ps: PlayerState) -> Result<(TableState, Pl
   let next = TableState::from(&table);
 
   ps.balance = player.balance;
+
+  ps.tables = ps.tables.drain(0..).chain(Some(ts.id.to_string())).collect();
+
   ts.roller = next.roller;
 
   ts.seats = next
@@ -47,6 +59,10 @@ fn stand_player(mut ts: TableState, mut ps: PlayerState) -> Result<(TableState, 
 
   let table = table.stand(&mut player);
   let next = TableState::from(&table);
+
+  if next.seats.contains_key(&ps.id) == false {
+    ps.tables = ps.tables.drain(0..).filter(|id| id != &ts.id.to_string()).collect();
+  }
 
   log::trace!("new player state - {:?}", player);
 
@@ -154,6 +170,11 @@ pub async fn join(mut request: Request) -> Result {
     .and_then(|auth| auth.player())
     .ok_or(Error::from_str(404, "no-player"))?;
 
+  if can_join(&player) != true {
+    let body = Body::from_string("too-many-active-seats".into());
+    return Ok(Response::builder(422).body(body).build());
+  }
+
   if player.balance == 0 {
     let body = Body::from_string("no-balance".into());
     return Ok(Response::builder(422).body(body).build());
@@ -185,7 +206,7 @@ pub async fn join(mut request: Request) -> Result {
   players
     .find_one_and_update(
       doc! { "id": ps.id.to_string() },
-      doc! { "$set": { "balance": ps.balance } },
+      doc! { "$set": { "balance": ps.balance, "tables": ps.tables } },
       opts,
     )
     .await
@@ -228,6 +249,11 @@ pub async fn create(request: Request) -> Result {
     .and_then(|auth| auth.player())
     .ok_or(Error::from_str(404, "no-player"))?;
 
+  if can_join(&player) != true {
+    let body = Body::from_string("too-many-active-seats".into());
+    return Ok(Response::builder(422).body(body).build());
+  }
+
   let tables = request.state().tables();
   let players = request.state().players();
 
@@ -241,7 +267,7 @@ pub async fn create(request: Request) -> Result {
   // is being serialized and persisted as a string. Without the explicit `to_string` here, the query attempts to
   // search for a binary match of the `uuid:Uuid`.
   let query = doc! { "id": ps.id.to_string() };
-  let updates = doc! { "$set": { "balance": ps.balance } };
+  let updates = doc! { "$set": { "balance": ps.balance, "tables": ps.tables } };
   let opts = FindOneAndUpdateOptions::builder()
     .return_document(ReturnDocument::After)
     .build();
@@ -334,7 +360,7 @@ pub async fn leave(mut request: Request) -> Result {
   players
     .update_one(
       doc! { "id": ps.id.to_string() },
-      doc! { "$set": { "balance": ps.balance } },
+      doc! { "$set": { "balance": ps.balance, "tables": ps.tables } },
       None,
     )
     .await
