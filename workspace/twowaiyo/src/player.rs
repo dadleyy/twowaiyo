@@ -14,6 +14,7 @@ impl From<&Player> for PlayerState {
       id: state.id.clone(),
       balance: state.balance,
       emails: vec![],
+      tables: vec![],
       nickname: String::default(),
       oid: String::default(),
     }

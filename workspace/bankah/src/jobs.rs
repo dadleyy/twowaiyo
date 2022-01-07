@@ -22,9 +22,21 @@ pub struct JobWapper<T> {
   pub attempts: u8,
 }
 
+impl<T> JobWapper<T> {
+  pub fn retry(self) -> Self {
+    let JobWapper { job, id, attempts } = self;
+    JobWapper {
+      job,
+      id,
+      attempts: attempts + 1,
+    }
+  }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum TableAdminJob {
   ReindexPopulations,
+  CleanupPlayerData(String),
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -43,12 +55,14 @@ impl TableJob {
     }
   }
 
-  pub fn retry(&self) -> Option<Self> {
+  pub fn admin(job: TableAdminJob) -> Self {
+    let id = uuid::Uuid::new_v4();
+    TableJob::Admin(JobWapper { job, id, attempts: 0 })
+  }
+
+  pub fn retry(self) -> Option<Self> {
     match self {
-      TableJob::Bet(inner) => Some(TableJob::Bet(JobWapper {
-        attempts: inner.attempts + 1,
-        ..inner.clone()
-      })),
+      TableJob::Bet(inner) => Some(TableJob::Bet(inner.retry())),
       _ => None,
     }
   }

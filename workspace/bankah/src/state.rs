@@ -98,4 +98,5 @@ pub struct PlayerState {
   pub emails: Vec<String>,
   pub nickname: String,
   pub balance: u32,
+  pub tables: Vec<String>,
 }
