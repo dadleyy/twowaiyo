@@ -1,8 +1,7 @@
 ## Stickbot
 
 This a [rust] application is the http-based web api backend for [twowaiyo], using a simple REST api to allow players
-to join, participate and leave games.
-
+to join, participate and leave games. The [emberjs] web-browser frontend is located at [github.com/dadleyy/oncore].
 
 #### Developing Locally
 
@@ -28,3 +27,5 @@ appropriate `cargo` aliases:
 [mdbc]: https://www.mongodb.com/cloud
 [redislabs]: https://app.redislabs.com/#/login
 [auth0]: https://auth0.com/
+[github.com/dadleyy/oncore]: https://github.com/dadleyy/oncore
+[emberjs]: https://emberjs.com/
