@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::constants;
 use crate::web::{cookie as get_cookie, Body, Error, Request, Response, Result};
 
 #[derive(Debug, Deserialize)]
@@ -25,9 +24,10 @@ pub async fn find(request: Request) -> Result {
     .ok_or(Error::from_str(404, ""))?;
 
   log::debug!("player '{}' checking on job '{}'", player.id, query.id);
+  let storage = format!("{}", crate::env::JobStore::Results);
 
   let command = kramer::Command::Hashes(kramer::HashCommand::Get::<_, &str>(
-    constants::STICKBOT_JOB_RESULTS,
+    storage.as_str(),
     Some(kramer::Arity::One(query.id.as_str())),
   ));
 

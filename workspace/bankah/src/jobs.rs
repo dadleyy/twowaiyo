@@ -2,6 +2,7 @@ use crate::state::BetState;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
 pub struct BetJob {
   pub bet: BetState,
   pub player: uuid::Uuid,
@@ -10,16 +11,26 @@ pub struct BetJob {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
 pub struct RollJob {
   pub table: uuid::Uuid,
   pub version: uuid::Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
 pub struct JobWapper<T> {
   pub job: T,
   pub id: uuid::Uuid,
   pub attempts: u8,
+}
+
+impl<T> JobWapper<T> {
+  pub fn wrap(job: T) -> Self {
+    let id = uuid::Uuid::new_v4();
+    let attempts = 0u8;
+    Self { job, attempts, id }
+  }
 }
 
 impl<T> JobWapper<T> {
@@ -34,15 +45,19 @@ impl<T> JobWapper<T> {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
 pub enum TableAdminJob {
   ReindexPopulations,
   CleanupPlayerData(String),
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
 pub enum TableJob {
   Bet(JobWapper<BetJob>),
   Roll(JobWapper<RollJob>),
+  Sit(JobWapper<(String, String)>),
+  Stand(JobWapper<(String, String)>),
   Admin(JobWapper<TableAdminJob>),
 }
 
@@ -51,8 +66,18 @@ impl TableJob {
     match self {
       TableJob::Bet(inner) => inner.id.clone(),
       TableJob::Roll(inner) => inner.id.clone(),
+      TableJob::Sit(inner) => inner.id.clone(),
+      TableJob::Stand(inner) => inner.id.clone(),
       TableJob::Admin(inner) => inner.id.clone(),
     }
+  }
+
+  pub fn sit(table: String, player: String) -> Self {
+    TableJob::Sit(JobWapper::wrap((table, player)))
+  }
+
+  pub fn stand(table: String, player: String) -> Self {
+    TableJob::Stand(JobWapper::wrap((table, player)))
   }
 
   pub fn admin(job: TableAdminJob) -> Self {
@@ -95,6 +120,7 @@ impl TableJob {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum BetFailureReason {
   InsufficientFunds,
   InvalidComeBet,
@@ -104,6 +130,7 @@ pub enum BetFailureReason {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TableJobOutput {
   BetProcessed,
   BetStale,
@@ -111,9 +138,12 @@ pub enum TableJobOutput {
   RollProcessed,
   RollStale,
   AdminOk,
+  StandOk,
+  SitOk,
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum JobError {
   Retryable,
   Terminal(String),

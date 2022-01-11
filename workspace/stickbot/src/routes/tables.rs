@@ -5,6 +5,7 @@ use crate::db::{doc, FindOneAndReplaceOptions, FindOneAndUpdateOptions, ReturnDo
 use crate::web::{cookie as get_cookie, Body, Error, Request, Response, Result};
 use crate::{constants, names};
 
+use bankah::jobs::TableJob;
 use bankah::state::{PlayerState, TableState};
 use twowaiyo::{Player, Table};
 
@@ -46,38 +47,6 @@ fn sit_player(mut ts: TableState, mut ps: PlayerState) -> Result<(TableState, Pl
       current.nickname = nickname;
 
       (uuid, current)
-    })
-    .collect();
-
-  Ok((ts, ps))
-}
-
-fn stand_player(mut ts: TableState, mut ps: PlayerState) -> Result<(TableState, PlayerState)> {
-  let mut player = Player::from(&ps);
-  let table = Table::from(&ts);
-  log::trace!("before player stand - {:?} {:?}", table, player);
-
-  let table = table.stand(&mut player);
-  let next = TableState::from(&table);
-
-  if next.seats.contains_key(&ps.id) == false {
-    ps.tables = ps.tables.drain(0..).filter(|id| id != &ts.id.to_string()).collect();
-  }
-
-  log::trace!("new player state - {:?}", player);
-
-  ps.balance = player.balance;
-
-  ts.seats = next
-    .seats
-    .into_iter()
-    .filter_map(|(uuid, mut state)| {
-      let original = ts.seats.remove(&uuid);
-
-      original.map(|orig| {
-        state.nickname = orig.nickname;
-        (uuid, state)
-      })
     })
     .collect();
 
@@ -328,97 +297,16 @@ pub async fn leave(mut request: Request) -> Result {
     .player()
     .ok_or(Error::from_str(404, "no-player"))?;
 
-  // TODO(table-id): Unlike player ids, it looks like the peristed, serialized bson data for tables uses a binary
-  // representation for the `uuid:Uuid` type.
-  let search = crate::db::lookup_for_uuid(&query.id);
-  log::debug!("user '{}' leaving table '{}' ({:?})", player.id, query.id, search);
+  log::debug!("user '{}' leaving table '{}'", player.id, query.id);
+  let job = TableJob::stand(query.id.to_string(), player.id.to_string());
 
-  let tables = request.state().tables();
-  let players = request.state().players();
-
-  let state = tables
-    .find_one(search.clone(), None)
-    .await
-    .map_err(|error| {
-      log::warn!("unable to find table - {}", error);
-      error
-    })?
-    .ok_or_else(|| {
-      log::warn!("unable to find table");
-      Error::from_str(404, "table-missing")
-    })?;
-
-  let (ts, ps) = stand_player(state, player)?;
-
-  log::debug!("table save, applying player balance - {:?}", ps);
-
-  tables.replace_one(search, &ts, None).await.map_err(|error| {
-    log::warn!("unable to persist table updates - {}", error);
+  let id = request.state().queue(&job).await.map_err(|error| {
+    log::warn!("unable to queue stand job - {}", error);
     error
   })?;
 
-  players
-    .update_one(
-      doc! { "id": ps.id.to_string() },
-      doc! { "$set": { "balance": ps.balance, "tables": ps.tables } },
-      None,
-    )
-    .await
-    .map_err(|error| {
-      log::warn!("unable to persist new player balance - {}", error);
-      error
-    })?;
+  log::debug!("job '{}' queued", id);
 
-  log::trace!("player '{}' finished leaving", ps.id);
-
-  // TODO: do we care if our attempt to enqueue a job fails from the web thread?
-  let job = bankah::jobs::TableJob::reindex();
-  request
-    .state()
-    .queue(&job)
-    .await
-    .map(|_| {
-      log::debug!("successfully queued indexing job");
-      ()
-    })
-    .unwrap_or_else(|error| {
-      log::warn!("unable to queue indexing job - {}", error);
-      ()
-    });
-
-  Body::from_json(&ts).map(|body| Response::builder(200).body(body).build())
-}
-
-#[cfg(test)]
-mod test {
-  use super::stand_player;
-  use bankah::state::{PlayerState, TableState};
-  use twowaiyo::{Bet, Player, Table};
-
-  #[test]
-  fn test_stand_with_remaining() {
-    let table = Table::with_dice(vec![2, 2].into_iter());
-    let mut player = Player::with_balance(200);
-    let table = table
-      .sit(&mut player)
-      .bet(&player, &Bet::start_pass(100))
-      .unwrap()
-      .roll()
-      .table;
-
-    let ps = PlayerState::from(&player);
-    assert_eq!(ps.balance, 0);
-    let (ts, ps) = stand_player(TableState::from(&table), ps).unwrap();
-    assert_eq!(ps.balance, 100, "some balance was returned");
-    assert_eq!(
-      ts.seats.get(&ps.id).map(|s| s.balance),
-      Some(0),
-      "the balance was zeroed"
-    );
-    assert_eq!(
-      ts.seats.get(&ps.id).map(|s| s.bets.len()),
-      Some(1),
-      "there is one bet left"
-    );
-  }
+  let res = bankah::JobResponse { job: id, output: None };
+  Body::from_json(&res).map(|body| Response::builder(200).body(body).build())
 }
