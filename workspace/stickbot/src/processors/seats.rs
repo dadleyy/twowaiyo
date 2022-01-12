@@ -2,6 +2,54 @@ use bankah::jobs::{JobError, TableAdminJob, TableJobOutput};
 use bankah::state::{PlayerState, TableState};
 use twowaiyo::{Player, Table};
 
+async fn find_player(services: &crate::Services, id: &String) -> Result<PlayerState, JobError> {
+  services
+    .players()
+    .find_one(crate::db::doc! { "id": id }, None)
+    .await
+    .map_err(|error| {
+      log::warn!("unable to query player - {}", error);
+      JobError::Terminal(format!("unable to query players - {}", error))
+    })?
+    .ok_or_else(|| {
+      log::warn!("unable to find player");
+      JobError::Terminal(format!("unable to find player '{}'", id))
+    })
+}
+
+fn sit_player(mut ts: TableState, mut ps: PlayerState) -> std::io::Result<(TableState, PlayerState)> {
+  let mut player = Player::from(&ps);
+
+  let table = Table::from(&ts).sit(&mut player);
+  let next = TableState::from(&table);
+
+  ps.balance = player.balance;
+
+  ps.tables = ps.tables.drain(0..).chain(Some(ts.id.to_string())).collect();
+
+  ts.roller = next.roller;
+
+  ts.seats = next
+    .seats
+    .into_iter()
+    .map(|(uuid, seat)| {
+      let original = ts.seats.remove(&uuid);
+      let mut current = original.unwrap_or(seat);
+
+      let nickname = match uuid == ps.id {
+        true => ps.nickname.clone(),
+        false => current.nickname.clone(),
+      };
+
+      current.nickname = nickname;
+
+      (uuid, current)
+    })
+    .collect();
+
+  Ok((ts, ps))
+}
+
 fn stand_player(mut ts: TableState, mut ps: PlayerState) -> std::io::Result<(TableState, PlayerState)> {
   let mut player = Player::from(&ps);
   let table = Table::from(&ts);
@@ -34,13 +82,144 @@ fn stand_player(mut ts: TableState, mut ps: PlayerState) -> std::io::Result<(Tab
   Ok((ts, ps))
 }
 
+pub async fn create(services: &crate::Services, pid: &String) -> Result<TableJobOutput, JobError> {
+  let player = find_player(&services, &pid).await?;
+  let name = crate::names::generate().map_err(|error| {
+    log::warn!("unable to generate random name - {}", error);
+    JobError::Retryable
+  })?;
+  let blank = TableState::with_name(name);
+  log::debug!("creating blank table - {:?}", blank);
+  let (table, player) = sit_player(blank, player).map_err(|error| {
+    log::warn!("logic error while sitting player '{}' at new table - {}", pid, error);
+    JobError::Terminal("".into())
+  })?;
+
+  let query = crate::db::doc! { "id": player.id.to_string() };
+  let updates = crate::db::doc! { "$set": { "balance": player.balance, "tables": player.tables } };
+  let opts = crate::db::FindOneAndUpdateOptions::builder()
+    .return_document(crate::db::ReturnDocument::After)
+    .build();
+
+  services
+    .players()
+    .find_one_and_update(query, updates, opts)
+    .await
+    .map_err(|error| {
+      log::warn!("unable to update player balance after create - {}", error);
+      JobError::Terminal(format!("failed player balance update - {}", error))
+    })?
+    .ok_or_else(|| {
+      log::warn!("no player to update");
+      JobError::Terminal(format!("missing player '{}' during balance update", pid))
+    })?;
+
+  log::debug!("inserting new table {:?}", table);
+
+  // TODO(mongo-uuid): we're using a `find_one_and_replace` w/ the upsert call here to circumvent the serialization
+  // discrepency between insertion and find/replace methods on the mongodb driver collection.
+  let tops = crate::db::FindOneAndReplaceOptions::builder().upsert(true).build();
+  services
+    .tables()
+    .find_one_and_replace(crate::db::lookup_for_uuid(&table.id), &table, Some(tops))
+    .await
+    .map_err(|error| {
+      log::warn!("unable to create new table - {:?}", error);
+      JobError::Terminal(format!("missing player '{}' during balance update", pid))
+    })?;
+
+  // TODO: do we care if our attempt to enqueue a job fails from the web thread?
+  services
+    .queue(&bankah::jobs::TableJob::admin(TableAdminJob::ReindexPopulations))
+    .await
+    .map(|_| ())
+    .unwrap_or_else(|error| {
+      log::warn!("unable to queue indexing job - {}", error);
+      ()
+    });
+
+  Ok(TableJobOutput::TableCreated(table.id.to_string()))
+}
+
 pub async fn sit(services: &crate::Services, entities: &(String, String)) -> Result<TableJobOutput, JobError> {
-  return Ok(TableJobOutput::BetStale);
+  let (tid, pid) = entities;
+  log::debug!("player '{}' is sitting down to table '{}'", pid, tid);
+
+  let tables = services.tables();
+  let players = services.players();
+
+  let player = players
+    .find_one(crate::db::doc! { "id": pid }, None)
+    .await
+    .map_err(|error| {
+      log::warn!("unable to query player - {}", error);
+      JobError::Terminal(format!("unable to query players - {}", error))
+    })?
+    .ok_or_else(|| {
+      log::warn!("unable to find player");
+      JobError::Terminal(format!("unable to find player '{}'", pid))
+    })?;
+
+  let state = tables
+    .find_one(crate::db::doc! { "id": tid }, None)
+    .await
+    .map_err(|error| {
+      log::warn!("unable to find table - {}", error);
+      JobError::Terminal(format!("unable to query tables - {}", error))
+    })?
+    .ok_or_else(|| {
+      log::warn!("unable to find table '{}'", tid);
+      JobError::Terminal(format!("unable to find table '{}'", tid))
+    })?;
+
+  let (ts, ps) = sit_player(state, player).map_err(|error| {
+    log::warn!("logic error sitting player - {}", error);
+    JobError::Terminal(format!("unable to sit player '{}'", error))
+  })?;
+
+  let opts = crate::db::FindOneAndUpdateOptions::builder()
+    .return_document(crate::db::ReturnDocument::After)
+    .build();
+
+  // TODO(player-id): another example of player id peristence mismatch.
+  players
+    .find_one_and_update(
+      crate::db::doc! { "id": pid },
+      crate::db::doc! { "$set": { "balance": ps.balance, "tables": ps.tables } },
+      opts,
+    )
+    .await
+    .map_err(|error| {
+      log::warn!("unable to update player balance after join - {}", error);
+      JobError::Terminal(format!("unable to update player '{}'", error))
+    })?
+    .ok_or_else(|| {
+      log::warn!("no player balance updated");
+      JobError::Terminal(format!("player '{}' not found, no update applied", pid))
+    })?;
+
+  tables
+    .find_one_and_replace(crate::db::doc! { "id": tid }, &ts, None)
+    .await
+    .map_err(|error| {
+      log::warn!("unable to create new table - {:?}", error);
+      JobError::Terminal(format!("table '{}' not updated - {}", tid, error))
+    })?;
+
+  // TODO: do we care if our attempt to enqueue a job fails from the web thread?
+  let job = bankah::jobs::TableJob::admin(TableAdminJob::ReindexPopulations);
+  services.queue(&job).await.map(|_| ()).unwrap_or_else(|error| {
+    log::warn!("unable to queue indexing job - {}", error);
+    ()
+  });
+
+  log::info!("player joined table '{}'", ts.id);
+
+  return Ok(TableJobOutput::SitOk);
 }
 
 pub async fn stand(services: &crate::Services, entities: &(String, String)) -> Result<TableJobOutput, JobError> {
   let (tid, pid) = entities;
-
   log::debug!("player '{}' is leaving table '{}'", pid, tid);
 
   let tables = services.tables();

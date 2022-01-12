@@ -22,22 +22,30 @@ async fn work(services: &stickbot::Services) -> Result<()> {
     TableJob::Bet(inner) => stickbot::processors::bet(&services, &inner.job).await,
     TableJob::Roll(inner) => stickbot::processors::roll(&services, &inner.job).await,
     TableJob::Sit(inner) => stickbot::processors::sit(&services, &inner.job).await,
-    TableJob::Stand(inner) => {
-      log::debug!("processing stand job '{}'", inner.id);
-      stickbot::processors::stand(&services, &inner.job).await
-    }
+    TableJob::Create(inner) => stickbot::processors::create(&services, &inner.job).await,
+    TableJob::Stand(inner) => stickbot::processors::stand(&services, &inner.job).await,
   };
+
+  let serialized = result
+    .map(|inner| bankah::jobs::JobResult::wrap(job.id(), inner))
+    .and_then(|out| {
+      serde_json::to_string(&out).map_err(|error| {
+        log::warn!("unable to serialze job output - {}", error);
+        bankah::jobs::JobError::Terminal(format!("unable to serialze job output - {}", error))
+      })
+    });
 
   // Processors will return a Result<E, T>, where `E` can either represent a "fatal" error that is non-retryable or
   // an error that is retryable. If the job is retryable, re-enqueue.
-  let output = match result {
-    Ok(output) => serde_json::to_string(&output)?,
+  let output = match serialized {
+    Ok(output) => output,
     Err(bankah::jobs::JobError::Retryable) => {
       let retry = job.retry().ok_or(Error::new(ErrorKind::Other, "no-retryable"))?;
       services.queue(&retry).await.map_err(|error| {
         log::warn!("unable to persist retry into queue - {}", error);
         error
       })?;
+      log::debug!("job '{}' scheduled for retry", retry.id());
       return Ok(());
     }
     Err(bankah::jobs::JobError::Terminal(error)) => return Err(Error::new(ErrorKind::Other, error)),

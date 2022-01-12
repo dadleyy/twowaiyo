@@ -57,6 +57,7 @@ pub enum TableJob {
   Bet(JobWapper<BetJob>),
   Roll(JobWapper<RollJob>),
   Sit(JobWapper<(String, String)>),
+  Create(JobWapper<String>),
   Stand(JobWapper<(String, String)>),
   Admin(JobWapper<TableAdminJob>),
 }
@@ -67,6 +68,7 @@ impl TableJob {
       TableJob::Bet(inner) => inner.id.clone(),
       TableJob::Roll(inner) => inner.id.clone(),
       TableJob::Sit(inner) => inner.id.clone(),
+      TableJob::Create(inner) => inner.id.clone(),
       TableJob::Stand(inner) => inner.id.clone(),
       TableJob::Admin(inner) => inner.id.clone(),
     }
@@ -140,6 +142,26 @@ pub enum TableJobOutput {
   AdminOk,
   StandOk,
   SitOk,
+  TableCreated(String),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct JobResult<T> {
+  completed: chrono::DateTime<chrono::Utc>,
+  output: T,
+  id: uuid::Uuid,
+}
+
+impl<T> JobResult<T> {
+  pub fn wrap(id: uuid::Uuid, inner: T) -> Self {
+    let completed = chrono::Utc::now();
+    Self {
+      output: inner,
+      id,
+      completed,
+    }
+  }
 }
 
 #[derive(Debug, Serialize)]
