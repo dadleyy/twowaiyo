@@ -345,7 +345,7 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
 name = "bankah"
-version = "0.3.4"
+version = "0.4.0"
 dependencies = [
  "bson",
  "chrono",
@@ -2178,7 +2178,7 @@ checksum = "213701ba3370744dcd1a12960caa4843b3d68b4d1c0a5d575e0d65b2ee9d16c0"
 
 [[package]]
 name = "stickbot"
-version = "0.3.4"
+version = "0.4.0"
 dependencies = [
  "async-std",
  "bankah",
@@ -2526,7 +2526,7 @@ dependencies = [
 
 [[package]]
 name = "twowaiyo"
-version = "0.3.4"
+version = "0.4.0"
 dependencies = [
  "bankah",
  "dotenv",
