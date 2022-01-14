@@ -65,6 +65,7 @@ fn stand_player(mut ts: TableState, mut ps: PlayerState) -> std::io::Result<(Tab
   log::trace!("new player state - {:?}", player);
 
   ps.balance = player.balance;
+  ts.roller = next.roller;
 
   ts.seats = next
     .seats
