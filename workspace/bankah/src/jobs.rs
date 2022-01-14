@@ -141,6 +141,7 @@ pub enum TableJobOutput {
   RollStale,
   AdminOk,
   StandOk,
+  FinalStandOk,
   SitOk,
   TableCreated(String),
 }
@@ -148,16 +149,24 @@ pub enum TableJobOutput {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct JobResult<T> {
-  completed: chrono::DateTime<chrono::Utc>,
-  output: T,
+  completed: Option<chrono::DateTime<chrono::Utc>>,
+  output: Option<T>,
   id: uuid::Uuid,
 }
 
 impl<T> JobResult<T> {
+  pub fn empty(id: uuid::Uuid) -> Self {
+    return Self {
+      id,
+      completed: None,
+      output: None,
+    };
+  }
+
   pub fn wrap(id: uuid::Uuid, inner: T) -> Self {
-    let completed = chrono::Utc::now();
+    let completed = Some(chrono::Utc::now());
     Self {
-      output: inner,
+      output: Some(inner),
       id,
       completed,
     }

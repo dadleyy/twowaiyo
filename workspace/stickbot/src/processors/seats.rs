@@ -254,16 +254,6 @@ pub async fn stand(services: &crate::Services, entities: &(String, String)) -> R
     JobError::Terminal(format!("logic error while standing player - '{}'", pid))
   })?;
 
-  tables
-    .replace_one(crate::db::doc! { "id": tid }, &table, None)
-    .await
-    .map_err(|error| {
-      log::warn!("unable to persist table updates - {}", error);
-      JobError::Retryable
-    })?;
-
-  log::debug!("table save, applying new player state for '{}'", player.id);
-
   players
     .update_one(
       crate::db::doc! { "id": player.id.to_string() },
@@ -275,6 +265,41 @@ pub async fn stand(services: &crate::Services, entities: &(String, String)) -> R
       log::warn!("unable to persist new player balance - {}", error);
       JobError::Retryable
     })?;
+
+  if table.seats.len() == 0 {
+    log::debug!("table '{}' is now empty, deleting", table.id);
+
+    tables
+      .delete_one(crate::db::doc! { "id": tid }, None)
+      .await
+      .map_err(|error| {
+        log::warn!("unable to persist table updates - {}", error);
+        JobError::Retryable
+      })?;
+
+    services
+      .table_index()
+      .delete_one(crate::db::doc! { "id": tid }, None)
+      .await
+      .map_err(|error| {
+        log::warn!("unable to persist table updates - {}", error);
+        JobError::Retryable
+      })?;
+
+    log::debug!("table '{}' cleanup complete", tid);
+
+    return Ok(TableJobOutput::FinalStandOk);
+  } else {
+    tables
+      .replace_one(crate::db::doc! { "id": tid }, &table, None)
+      .await
+      .map_err(|error| {
+        log::warn!("unable to persist table updates - {}", error);
+        JobError::Retryable
+      })?;
+  }
+
+  log::debug!("table save, applying new player state for '{}'", player.id);
 
   log::debug!("player '{}' updated, reindexing populations", player.id);
 
