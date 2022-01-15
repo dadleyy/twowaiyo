@@ -28,6 +28,20 @@ async fn connect_redis() -> Result<TcpStream> {
   Ok(redis)
 }
 
+fn response_string(response: &kramer::ResponseValue) -> Option<String> {
+  match response {
+    kramer::ResponseValue::String(inner) => Some(inner.clone()),
+    res => {
+      log::warn!("strange response from job queue - {:?}", res);
+      None
+    }
+  }
+}
+
+fn parse_pop(response: &kramer::ResponseValue) -> Option<bankah::jobs::TableJob> {
+  response_string(&response).and_then(|contents| serde_json::from_str::<bankah::jobs::TableJob>(&contents).ok())
+}
+
 #[derive(Clone)]
 pub struct Services {
   db: db::Client,
@@ -44,15 +58,47 @@ impl Services {
   }
 
   pub fn table_index(&self) -> db::Collection<bankah::state::TableIndexState> {
-    self.collection(constants::MONGO_DB_TABLE_LIST_COLLECTION_NAME)
+    self.collection(&format!("{}", crate::env::Collection::TableList))
   }
 
   pub fn tables(&self) -> db::Collection<bankah::state::TableState> {
-    self.collection(constants::MONGO_DB_TABLE_COLLECTION_NAME)
+    self.collection(&format!("{}", crate::env::Collection::Tables))
   }
 
   pub fn players(&self) -> db::Collection<bankah::state::PlayerState> {
-    self.collection(constants::MONGO_DB_PLAYER_COLLECTION_NAME)
+    self.collection(&format!("{}", crate::env::Collection::Players))
+  }
+
+  pub async fn pop(&self) -> Result<Option<bankah::jobs::TableJob>> {
+    let cmd = kramer::Command::List::<_, String>(kramer::ListCommand::Pop(
+      kramer::Side::Left,
+      crate::env::JobStore::Queue,
+      Some((None, 3)),
+    ));
+
+    let result = match self.command(&cmd).await {
+      Err(error) => {
+        log::warn!("unable to pop from bet queue - {}", error);
+        return Err(Error::new(ErrorKind::Other, format!("{}", error)));
+      }
+      Ok(kramer::Response::Item(kramer::ResponseValue::Empty)) => {
+        log::debug!("empty response from queue, moving on");
+        return Ok(None);
+      }
+      Ok(kramer::Response::Array(values)) => values,
+      Ok(kramer::Response::Error) => {
+        log::warn!("unable to pop from queue - redis error");
+        return Err(Error::new(ErrorKind::Other, "invalid-response"));
+      }
+      Ok(kramer::Response::Item(inner)) => {
+        log::warn!("unknown response from pop - '{:?}'", inner);
+        return Err(Error::new(ErrorKind::Other, format!("{:?}", inner)));
+      }
+    };
+
+    log::debug!("result from pop - {:?}, attempting to deserialize", result);
+
+    Ok(result.get(1).and_then(parse_pop))
   }
 
   pub async fn queue(&self, job: &bankah::jobs::TableJob) -> Result<uuid::Uuid> {
@@ -63,11 +109,14 @@ impl Services {
 
     let command = kramer::Command::List(kramer::ListCommand::Push(
       (kramer::Side::Right, kramer::Insertion::Always),
-      constants::STICKBOT_JOB_QUEUE,
+      crate::env::JobStore::Queue,
       kramer::Arity::One(serialized),
     ));
 
-    self.command(&command).await.map(|_| job.id())
+    self.command(&command).await.map(|result| {
+      log::debug!("executed queue command - {:?}", result);
+      job.id()
+    })
   }
 
   pub async fn authority<T>(&self, token: T) -> Option<auth::Authority>

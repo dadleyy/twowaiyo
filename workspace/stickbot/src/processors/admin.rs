@@ -8,6 +8,8 @@ use crate::Services;
 pub async fn reindex(services: &Services, job: &TableAdminJob) -> Result<TableJobOutput, JobError> {
   log::info!("attempting to reindex table populations - {:?}", job);
   let tables = services.tables();
+  let destination = format!("{}", crate::env::Collection::TableList);
+
   let pipeline = vec![
     doc! { "$project": { "id": 1, "name": 1, "seats": { "$objectToArray": "$seats" } } },
     doc! { "$project": { "id": 1, "name": 1, "population": {
@@ -17,7 +19,7 @@ pub async fn reindex(services: &Services, job: &TableAdminJob) -> Result<TableJo
         "in": ["$$seat.k", "$$seat.v.nickname"],
       },
     } } },
-    doc! { "$merge": { "into": crate::constants::MONGO_DB_TABLE_LIST_COLLECTION_NAME } },
+    doc! { "$merge": { "into": destination } },
   ];
   tables.aggregate(pipeline, None).await.map_err(|error| {
     log::warn!("unable to perform aggregate - {}", error);

@@ -1,17 +1,12 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-use crate::constants;
+use bankah::jobs::{JobResult, TableJobOutput};
+
 use crate::web::{cookie as get_cookie, Body, Error, Request, Response, Result};
 
 #[derive(Debug, Deserialize)]
 pub struct JobLookupQuery {
   id: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct JobLookupResponse {
-  id: String,
-  output: Option<bankah::jobs::TableJobOutput>,
 }
 
 pub async fn find(request: Request) -> Result {
@@ -25,9 +20,10 @@ pub async fn find(request: Request) -> Result {
     .ok_or(Error::from_str(404, ""))?;
 
   log::debug!("player '{}' checking on job '{}'", player.id, query.id);
+  let storage = format!("{}", crate::env::JobStore::Results);
 
   let command = kramer::Command::Hashes(kramer::HashCommand::Get::<_, &str>(
-    constants::STICKBOT_JOB_RESULTS,
+    storage.as_str(),
     Some(kramer::Arity::One(query.id.as_str())),
   ));
 
@@ -40,12 +36,14 @@ pub async fn find(request: Request) -> Result {
     kramer::Response::Item(kramer::ResponseValue::String(inner)) => inner.clone(),
     kramer::Response::Item(kramer::ResponseValue::Empty) => {
       log::debug!("nothing in job result store for '{}' yet", query.id);
-
-      return Body::from_json(&JobLookupResponse {
-        id: query.id.clone(),
-        output: None,
-      })
-      .map(|bod| Response::builder(200).body(bod).build());
+      return uuid::Uuid::parse_str(&query.id)
+        .map_err(|error| {
+          log::warn!("unable to parse input as uuid - '{}'", error);
+          Error::from_str(422, "invalid-id")
+        })
+        .map(|uuid| JobResult::empty(uuid) as JobResult<u8>)
+        .and_then(|res| Body::from_json(&res))
+        .map(|bod| Response::builder(200).body(bod).build());
     }
     other => {
       log::warn!("strange response from job lookup - {:?}", other);
@@ -55,18 +53,15 @@ pub async fn find(request: Request) -> Result {
 
   log::debug!("response from result lookup - {:?}", payload);
 
-  let parsed = serde_json::from_str::<bankah::jobs::TableJobOutput>(&payload).map_err(|error| {
+  let parsed = serde_json::from_str::<JobResult<TableJobOutput>>(&payload).map_err(|error| {
     log::warn!("unable to parse job output - {}", error);
     Error::from_str(500, "bad-parse")
   })?;
 
-  Body::from_json(&JobLookupResponse {
-    id: query.id.clone(),
-    output: Some(parsed),
-  })
-  .map(|bod| Response::builder(200).body(bod).build())
-  .map_err(|error| {
-    log::warn!("unable to serialize job lookup - {}", error);
-    error
-  })
+  Body::from_json(&parsed)
+    .map(|bod| Response::builder(200).body(bod).build())
+    .map_err(|error| {
+      log::warn!("unable to serialize job lookup - {}", error);
+      error
+    })
 }

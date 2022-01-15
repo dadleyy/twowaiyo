@@ -19,6 +19,11 @@ with these services.
 Once the environment variables have been prepared, the main web process and background worker can be started using the
 appropriate `cargo` aliases:
 
+```
+$ cargo stickbot   <- web thread
+$ cargo boxbot     <- background worker
+```
+
 
 [rust]: https://www.rust-lang.org/
 [twowaiyo]: https://github.com/dadleyy/twowaiyo
