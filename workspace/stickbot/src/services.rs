@@ -82,7 +82,7 @@ impl Services {
         return Err(Error::new(ErrorKind::Other, format!("{}", error)));
       }
       Ok(kramer::Response::Item(kramer::ResponseValue::Empty)) => {
-        log::debug!("empty response from queue, moving on");
+        log::debug!("empty response from queue");
         return Ok(None);
       }
       Ok(kramer::Response::Array(values)) => values,
@@ -173,9 +173,10 @@ impl Services {
     V: std::fmt::Display,
   {
     loop {
+      log::debug!("requesting tcp write access trhough lock");
       let mut lock = self.redis.lock().await;
       let mut redis: &mut TcpStream = &mut lock;
-      log::trace!("attempting to send command to redis - {}", command);
+      log::debug!("lock acquired, attempting to send command");
       let result = kramer::execute(&mut redis, command).await;
 
       if attempt > 10 {
@@ -195,7 +196,7 @@ impl Services {
       }
 
       if let Ok(response) = result {
-        log::trace!("redis command executed successfully - {:?}", response);
+        log::debug!("redis command executed successfully - {:?}", response);
         return Ok(response);
       }
     }

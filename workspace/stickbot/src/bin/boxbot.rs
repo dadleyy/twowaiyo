@@ -8,7 +8,10 @@ use bankah::jobs::{TableAdminJob, TableJob};
 async fn work(services: &stickbot::Services) -> Result<()> {
   let job = match services.pop().await? {
     Some(job) => job,
-    None => return Ok(()),
+    None => {
+      log::debug!("no job returned from queue");
+      return Ok(());
+    }
   };
 
   log::debug!("deserialized job from queue - {:?}", job);
