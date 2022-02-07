@@ -8,19 +8,13 @@ use crate::auth;
 use crate::constants;
 use crate::db;
 
-async fn connect_redis() -> Result<TcpStream> {
-  let config = (
-    std::env::var(constants::REDIS_HOSTNAME_ENV).unwrap_or_default(),
-    std::env::var(constants::REDIS_PORT_ENV).unwrap_or_default(),
-    std::env::var(constants::REDIS_PASSWORD_ENV).unwrap_or_default(),
-  );
-
-  log::debug!("redis configuration - '{}', connecting", config.0);
-  let mut redis = TcpStream::connect(format!("{}:{}", config.0, config.1)).await?;
+async fn connect_redis(config: &crate::redis::RedisConfig) -> Result<TcpStream> {
+  log::debug!("redis configuration - '{}', connecting", config.host);
+  let mut redis = TcpStream::connect(format!("{}:{}", config.host, config.port)).await?;
   log::debug!("connection established - {:?}, authenticating", redis.peer_addr());
 
-  if config.2.len() > 0 {
-    let cmd = kramer::Command::Auth::<String, String>(kramer::AuthCredentials::Password(config.2));
+  if config.password.len() > 0 {
+    let cmd = kramer::Command::Auth::<&String, &String>(kramer::AuthCredentials::Password(&config.password));
     let result = kramer::execute(&mut redis, cmd).await?;
     log::debug!("authentication result - {:?}", result);
   }
@@ -46,6 +40,8 @@ fn parse_pop(response: &kramer::ResponseValue) -> Option<bankah::jobs::TableJob>
 pub struct Services {
   db: db::Client,
   redis: Arc<Mutex<TcpStream>>,
+  rc: crate::redis::RedisConfig,
+  version: String,
 }
 
 impl Services {
@@ -172,34 +168,42 @@ impl Services {
     S: std::fmt::Display,
     V: std::fmt::Display,
   {
-    loop {
-      log::debug!("requesting tcp write access trhough lock");
+    while attempt < 10 {
+      log::info!("requesting tcp write access through lock (attempt {})", attempt);
       let mut lock = self.redis.lock().await;
       let mut redis: &mut TcpStream = &mut lock;
       log::debug!("lock acquired, attempting to send command");
-      let result = kramer::execute(&mut redis, command).await;
 
-      if attempt > 10 {
-        log::warn!("retry-attempts exceeded maximum, returning result {:?}", result);
-        return result;
-      }
-
-      if let Err(error) = &result {
-        log::warn!("failed executing command - {}", error);
-
-        if error.kind() == ErrorKind::BrokenPipe && attempt < 10 {
-          log::info!("broken pipe, attempting to re-establish connection");
-          *lock = connect_redis().await?;
+      match async_std::future::timeout(std::time::Duration::from_secs(5), kramer::execute(&mut redis, command)).await {
+        Err(timeout_error) => {
+          log::warn!("timeout error during command transfer - {}", timeout_error);
+          *lock = connect_redis(&self.rc).await?;
+          return Err(Error::new(ErrorKind::Other, "timeout-error"));
         }
+        Ok(result) => {
+          log::info!("result received within timeout, checking...");
 
-        attempt = attempt + 1;
-      }
+          match result {
+            Err(error) => {
+              log::warn!("failed executing command - {}", error);
 
-      if let Ok(response) = result {
-        log::debug!("redis command executed successfully - {:?}", response);
-        return Ok(response);
+              if error.kind() == ErrorKind::BrokenPipe {
+                log::info!("broken pipe, attempting to re-establish connection");
+                *lock = connect_redis(&self.rc).await?;
+              }
+
+              attempt = attempt + 1;
+            }
+            Ok(response) => {
+              log::debug!("redis command executed successfully - {:?}", response);
+              return Ok(response);
+            }
+          }
+        }
       }
     }
+
+    Err(Error::new(ErrorKind::Other, "too-many-attempts"))
   }
 
   pub async fn status(&self) -> Result<()> {
@@ -211,14 +215,30 @@ impl Services {
   }
 
   pub async fn new() -> Result<Self> {
-    let mongo_url = std::env::var(constants::MONGO_DB_ENV_URL).unwrap_or_default();
-    log::debug!("attempting to establish mongo connection at {}", mongo_url);
-    let mongo = db::connect(mongo_url).await?;
-    let redis = connect_redis().await?;
+    let mc = std::env::var(constants::MONGO_DB_ENV_URL).map_err(|error| {
+      log::warn!("unable to find mongo config '{}' in environment", error);
+      Error::new(ErrorKind::Other, "missing-redis-config")
+    })?;
+    let rc = crate::redis::from_env().ok_or(Error::new(ErrorKind::Other, "missing-redis-config"))?;
 
+    log::info!("connecting to mongo...");
+    let mongo = db::connect(mc).await?;
+
+    log::info!("connecting to redis...");
+    let redis = connect_redis(&rc).await?;
+
+    log::info!("services ready!");
     Ok(Services {
       db: mongo,
+      rc: rc,
       redis: Arc::new(Mutex::new(redis)),
+      version: std::option_env!("STICKBOT_VERSION").unwrap_or("dev").to_string(),
     })
+  }
+}
+
+impl std::fmt::Display for Services {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    write!(formatter, "stickbot-services@v{}", self.version)
   }
 }
