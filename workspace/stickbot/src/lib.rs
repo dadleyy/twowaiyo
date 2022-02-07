@@ -1,6 +1,7 @@
 mod auth;
 mod db;
 mod names;
+mod redis;
 mod services;
 mod web;
 

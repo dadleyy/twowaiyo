@@ -13,17 +13,28 @@ use crate::web::{Body, Request, Response, Result};
 #[derive(Serialize)]
 struct Heartbeat {
   time: chrono::DateTime<chrono::offset::Utc>,
+  version: String,
 }
 
 impl Default for Heartbeat {
   fn default() -> Self {
     let time = chrono::offset::Utc::now();
-    Heartbeat { time }
+    Heartbeat {
+      time,
+      version: "dev".into(),
+    }
   }
 }
 
 pub async fn heartbeat(request: Request) -> Result {
-  let body = Body::from_json(&Heartbeat::default()).expect("");
+  let body = Body::from_json(&Heartbeat {
+    version: format!("{}", request.state()),
+    ..Heartbeat::default()
+  })
+  .map_err(|error| {
+    log::warn!("unable to serialize heartbeat payload - {}", error);
+    tide::Error::from_str(500, "bad-serialize")
+  })?;
   let state = request.state();
   let status = state.status().await;
   log::debug!("services status - {:?}", status);
