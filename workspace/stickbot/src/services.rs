@@ -203,6 +203,7 @@ impl Services {
       }
     }
 
+    log::warn!("failed redis connection after {} attempts", attempt);
     Err(Error::new(ErrorKind::Other, "too-many-attempts"))
   }
 
