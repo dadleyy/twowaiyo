@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: rust:1.58.1
+    env:
+      TWOWAIYO_VERSION: "${{ github.sha }}"
     steps:
       - uses: actions/checkout@v2
       - name: Update apt
@@ -53,14 +55,9 @@ jobs:
       - name: Populate distributable (boxbot)
         run: cp target/armv7-unknown-linux-gnueabihf/release/boxbot target/dist/twowaiyo/boxbot
       - name: Compress distributable
-        run: tar cvzf ./twowaiyo-armv7-unknown-linux-gnueabihf.tar.gz -C target/dist twowaiyo
+        run: tar cvzf ./twowaiyo-armv7-unknown-linux-gnueabihf-$GITHUB_SHA.tar.gz -C target/dist twowaiyo
       - name: Create Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: ./twowaiyo-armv7-unknown-linux-gnueabihf.tar.gz
-################################################################
-# the following workflow have been deprecated:
-#  - https://github.com/actions/create-release
-#  - https://github.com/actions/upload-release-asset
-################################################################
+          files: "./twowaiyo-armv7-unknown-linux-gnueabihf-${{ github.sha }}".tar.gz
