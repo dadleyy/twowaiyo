@@ -60,4 +60,4 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: "./twowaiyo-armv7-unknown-linux-gnueabihf-${{ github.sha }}".tar.gz
+          files: "./twowaiyo-armv7-unknown-linux-gnueabihf-${{ github.sha }}.tar.gz"
