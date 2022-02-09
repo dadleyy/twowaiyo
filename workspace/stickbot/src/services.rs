@@ -233,13 +233,13 @@ impl Services {
       db: mongo,
       rc: rc,
       redis: Arc::new(Mutex::new(redis)),
-      version: std::option_env!("STICKBOT_VERSION").unwrap_or("dev").to_string(),
+      version: std::option_env!("TWOWAIYO_VERSION").unwrap_or("dev").to_string(),
     })
   }
 }
 
 impl std::fmt::Display for Services {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(formatter, "stickbot-services@v{}", self.version)
+    write!(formatter, "stickbot-services@{}", self.version)
   }
 }
