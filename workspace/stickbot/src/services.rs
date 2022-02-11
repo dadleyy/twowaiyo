@@ -163,13 +163,19 @@ impl Services {
     self.inner_command(command, 0).await
   }
 
+  #[allow(unused_assignments)]
   async fn inner_command<S, V>(&self, command: &kramer::Command<S, V>, mut attempt: u8) -> Result<kramer::Response>
   where
     S: std::fmt::Display,
     V: std::fmt::Display,
   {
-    while attempt < 10 {
-      log::info!("requesting tcp write access through lock (attempt {})", attempt);
+    loop {
+      if attempt > 10 {
+        log::warn!("failed redis connection after {} attempts", attempt);
+        return Err(Error::new(ErrorKind::Other, "too-many-attempts"));
+      }
+
+      log::debug!("requesting tcp write access through lock (attempt {})", attempt);
       let mut lock = self.redis.lock().await;
       let mut redis: &mut TcpStream = &mut lock;
       log::debug!("lock acquired, attempting to send command");
@@ -178,33 +184,25 @@ impl Services {
         Err(timeout_error) => {
           log::warn!("timeout error during command transfer - {}", timeout_error);
           *lock = connect_redis(&self.rc).await?;
+          attempt += 1;
           return Err(Error::new(ErrorKind::Other, "timeout-error"));
         }
-        Ok(result) => {
-          log::info!("result received within timeout, checking...");
+        Ok(Err(error)) => {
+          log::warn!("failed executing command - {}", error);
 
-          match result {
-            Err(error) => {
-              log::warn!("failed executing command - {}", error);
-
-              if error.kind() == ErrorKind::BrokenPipe {
-                log::info!("broken pipe, attempting to re-establish connection");
-                *lock = connect_redis(&self.rc).await?;
-              }
-
-              attempt = attempt + 1;
-            }
-            Ok(response) => {
-              log::debug!("redis command executed successfully - {:?}", response);
-              return Ok(response);
-            }
+          if error.kind() == ErrorKind::BrokenPipe {
+            log::warn!("broken pipe, attempting to re-establish connection");
+            *lock = connect_redis(&self.rc).await?;
           }
+
+          attempt += 1;
+        }
+        Ok(Ok(response)) => {
+          log::debug!("redis success - {:?} (attempt {})", response, attempt);
+          return Ok(response);
         }
       }
     }
-
-    log::warn!("failed redis connection after {} attempts", attempt);
-    Err(Error::new(ErrorKind::Other, "too-many-attempts"))
   }
 
   pub async fn status(&self) -> Result<()> {

@@ -9,7 +9,7 @@ async fn work(services: &stickbot::Services) -> Result<()> {
   let job = match services.pop().await? {
     Some(job) => job,
     None => {
-      log::debug!("no job returned from queue");
+      log::info!("no available jobs, moving on.");
       return Ok(());
     }
   };
