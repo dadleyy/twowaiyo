@@ -32,7 +32,7 @@ impl Authority {
 pub struct Claims {
   pub exp: usize,
   pub oid: String,
-  pub id: String,
+  pub id: uuid::Uuid,
 }
 
 impl Claims {
@@ -66,7 +66,7 @@ impl Claims {
     Self {
       exp,
       oid: format!("{}", oid),
-      id: format!("{}", id),
+      id: uuid::Uuid::parse_str(&format!("{}", id)).unwrap_or_else(|_| uuid::Uuid::new_v4()),
     }
   }
 

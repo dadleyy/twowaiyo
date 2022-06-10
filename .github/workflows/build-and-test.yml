@@ -12,7 +12,7 @@ jobs:
   dist:
     runs-on: ubuntu-latest
     container:
-      image: rust:1.58.1
+      image: rust:1.61.0
     env:
       TWOWAIYO_VERSION: "${{ github.sha }}"
     steps:

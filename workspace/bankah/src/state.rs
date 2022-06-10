@@ -93,6 +93,7 @@ impl Default for TableState {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PlayerState {
+  #[serde(with = "bson::serde_helpers::uuid_as_binary")]
   pub id: uuid::Uuid,
   pub oid: String,
   pub emails: Vec<String>,

@@ -126,10 +126,18 @@ impl Services {
     ));
 
     // TODO: should the storage value be used? is a hash the right move here?
-    match self.command(&cmd).await.ok()? {
+    match self
+      .command(&cmd)
+      .await
+      .map_err(|error| {
+        log::warn!("unable to issue redis session command - {error}");
+        error
+      })
+      .ok()?
+    {
       kramer::Response::Item(kramer::ResponseValue::String(inner)) => Some(inner),
       other => {
-        log::trace!("session-store lookup missing or invalid - {:?}", other);
+        log::warn!("session-store lookup missing or invalid - {:?}", other);
         None
       }
     }?;
@@ -138,15 +146,32 @@ impl Services {
     let collection = self.players();
     let admins = std::env::var(constants::STICKBOT_ADMIN_EMAILS_ENV).unwrap_or_default();
 
-    log::trace!("decoded claims '{:?}', fetching user (admins {})", claims, admins);
+    log::debug!(
+      "decoded claims exp:'{}', oid:'{}', id:'{:?}'",
+      claims.exp,
+      claims.oid,
+      claims.id
+    );
 
     // TODO(player-id): the player id is serialized as a string when peristing into the players collection during the
     // completion of the oauth flow.
     collection
-      .find_one(db::doc! { "oid": claims.oid.clone(), "id": claims.id.clone() }, None)
+      .find_one(db::doc! { "oid": claims.oid, "id": claims.id}, None)
       .await
+      .map_err(|error| {
+        log::warn!("unable to query player collection - {error}");
+        error
+      })
       .ok()
+      .or_else(|| {
+        log::warn!("unable to find player matching query...");
+        None
+      })
       .and_then(|maybe_player| maybe_player)
+      .or_else(|| {
+        log::warn!("[mongo-problem?] unable to make player from query result.");
+        None
+      })
       .map(
         |player| match player.emails.iter().find(|e| e.as_str() == admins.as_str()) {
           Some(_) => auth::Authority::Admin(player),

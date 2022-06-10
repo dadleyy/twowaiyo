@@ -94,7 +94,7 @@ async fn token_from_response(response: &mut surf::Response) -> Option<String> {
     .map(|body| body.access_token)
 }
 
-fn mkplayer(userinfo: &UserInfo) -> std::io::Result<db::bson::Document> {
+fn player_from_userinfo(userinfo: &UserInfo) -> std::io::Result<db::bson::Document> {
   let id = uuid::Uuid::new_v4();
   let oid = userinfo.sub.clone();
   let nickname = userinfo.nickname.clone();
@@ -122,15 +122,25 @@ fn mkplayer(userinfo: &UserInfo) -> std::io::Result<db::bson::Document> {
 // Return our persisted player information from the token provided in our cookie.
 pub async fn identify(request: Request) -> Result {
   let cookie = get_cookie(&request).ok_or(Error::from_str(404, "no-session"))?;
+
+  log::debug!("[identify] loaded cookie - {cookie:?}");
+
   let authority = request
     .state()
     .authority(cookie.value())
     .await
-    .ok_or(Error::from_str(404, "no-user"))?
+    .ok_or_else(|| {
+      log::warn!("no authority");
+      Error::from_str(404, "no-user")
+    })?
     .player()
+    .or_else(|| {
+      log::warn!("no player");
+      None
+    })
     .ok_or(Error::from_str(404, "no-player"))?;
 
-  log::trace!("loaded authority - {:?}", authority);
+  log::debug!("[identify] loaded authority - '{:?}'", authority.id);
 
   Body::from_json(&authority)
     .map(|body| Response::builder(200).body(body).build())
@@ -157,16 +167,16 @@ pub async fn complete(request: Request) -> Result {
     ..AuthCodeRequest::default()
   };
   let destination = std::env::var(constants::AUTH_O_TOKEN_URI_ENV).unwrap_or_default();
-  log::info!("exchanging code - {} (at {})", payload.code, destination);
+  log::debug!("[complete] exchanging code - {} (at {})", payload.code, destination);
   let mut response = surf::post(&destination).body_json(&payload)?.await?;
   let token = token_from_response(&mut response)
     .await
     .ok_or(Error::from_str(404, "token-exchange"))?;
 
   // With our token, attempt to load the user info.
-  log::info!("created token, loading user info");
+  log::debug!("[complete] created token, loading user info");
   let user = fetch_user(&token).await.ok_or(Error::from_str(404, "user-not-found"))?;
-  log::info!("user loaded - oid: '{}'. finding or creating record", user.sub);
+  log::debug!("[complete] user - oid: '{}'. finding or creating record", user.sub);
 
   // With our loaded user data, attempt to store a new record in our players collection.
   let collection = request.state().players();
@@ -177,7 +187,7 @@ pub async fn complete(request: Request) -> Result {
     .build();
 
   let query = db::doc! { "oid": user.sub.clone() };
-  let updates = mkplayer(&user)?;
+  let updates = player_from_userinfo(&user)?;
 
   let player = collection
     .find_one_and_update(query, updates, options)
@@ -188,7 +198,7 @@ pub async fn complete(request: Request) -> Result {
     })?
     .ok_or(Error::from_str(404, "missing-player"))?;
 
-  log::info!("found record - {:?}, building token", player);
+  log::debug!("[complete] found record - '{}', building token", player.id);
 
   let jwt = auth::Claims::for_player(&user.sub, &player.id.to_string()).encode()?;
 
@@ -205,7 +215,7 @@ pub async fn complete(request: Request) -> Result {
 
   // With our player created, we're ready to store the token in our session and move along.
   let cookie = format!("{}={}; {}", constants::STICKBOT_COOKIE_NAME, jwt, COOKIE_SET_FLAGS);
-  log::debug!("cookie string - '{}'", cookie);
+  log::debug!("[complete] cookie string - '{}'", cookie);
 
   let destination = std::env::var(constants::STICKBOT_ONCORE_URL_ENV)
     .ok()
@@ -267,7 +277,7 @@ pub async fn start(_: Request) -> Result {
   let client_id = std::env::var(constants::AUTH_O_CLIENT_ID_ENV).ok();
   let auth_uri = std::env::var(constants::AUTH_O_AUTH_URI_ENV).ok();
   let redir_uri = std::env::var(constants::AUTH_O_REDIRECT_URI_ENV).ok();
-  log::info!("new user, redirecting to auth flow");
+  log::debug!("new user, redirecting to auth flow");
 
   client_id
     .zip(auth_uri)
@@ -283,7 +293,7 @@ pub async fn start(_: Request) -> Result {
           ("scope", &"openid profile email"),
         ],
       )?;
-      log::info!("creating auth redir '{}'", &url);
+      log::debug!("creating auth redir '{}'", &url);
       Ok(Redirect::temporary(url.to_string()).into())
     })
 }
