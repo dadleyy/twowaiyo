@@ -51,7 +51,6 @@ pub struct TableIndexState {
   pub population: Vec<(String, String)>,
 }
 
-#[serde_with::serde_as]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TableState {
   pub id: String,

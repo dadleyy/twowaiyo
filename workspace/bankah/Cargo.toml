@@ -5,7 +5,6 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "^1.0", features = ["derive"] }
-serde_with = { version = "^1.0" }
 uuid = { version = "^0.8", features = ["v4", "serde"] }
-bson = { version = "2.0.0", features = ["uuid-0_8", "serde_with"] }
+bson = { version = "2.0.0", features = ["uuid-0_8"] }
 chrono = { version = "^0.4", features = ["serde"] }

@@ -341,7 +341,6 @@ dependencies = [
  "bson",
  "chrono",
  "serde",
- "serde_with",
  "uuid",
 ]
 
@@ -440,7 +439,6 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "serde_with",
  "time 0.3.9",
  "uuid",
 ]
