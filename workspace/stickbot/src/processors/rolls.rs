@@ -27,7 +27,7 @@ fn apply_roll(mut state: TableState) -> Result<TableState, JobError> {
     .collect();
 
   state.button = next.button;
-  state.nonce = uuid::Uuid::new_v4();
+  state.nonce = uuid::Uuid::new_v4().to_string();
   state.roller = next.roller;
   state.rolls = next.rolls;
 

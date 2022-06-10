@@ -32,7 +32,7 @@ impl Authority {
 pub struct Claims {
   pub exp: usize,
   pub oid: String,
-  pub id: uuid::Uuid,
+  pub id: String,
 }
 
 impl Claims {
@@ -64,9 +64,9 @@ impl Claims {
     log::debug!("encoding new jwt, expires {}", exp);
 
     Self {
+      id: format!("{}", id),
       exp,
       oid: format!("{}", oid),
-      id: uuid::Uuid::parse_str(&format!("{}", id)).unwrap_or_else(|_| uuid::Uuid::new_v4()),
     }
   }
 

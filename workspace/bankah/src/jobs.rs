@@ -5,29 +5,29 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub struct BetJob {
   pub bet: BetState,
-  pub player: uuid::Uuid,
-  pub table: uuid::Uuid,
-  pub version: uuid::Uuid,
+  pub player: String,
+  pub table: String,
+  pub version: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct RollJob {
-  pub table: uuid::Uuid,
-  pub version: uuid::Uuid,
+  pub table: String,
+  pub version: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct JobWapper<T> {
   pub job: T,
-  pub id: uuid::Uuid,
+  pub id: String,
   pub attempts: u8,
 }
 
 impl<T> JobWapper<T> {
   pub fn wrap(job: T) -> Self {
-    let id = uuid::Uuid::new_v4();
+    let id = uuid::Uuid::new_v4().to_string();
     let attempts = 0u8;
     Self { job, attempts, id }
   }
@@ -63,7 +63,7 @@ pub enum TableJob {
 }
 
 impl TableJob {
-  pub fn id(&self) -> uuid::Uuid {
+  pub fn id(&self) -> String {
     match self {
       TableJob::Bet(inner) => inner.id.clone(),
       TableJob::Roll(inner) => inner.id.clone(),
@@ -83,7 +83,7 @@ impl TableJob {
   }
 
   pub fn admin(job: TableAdminJob) -> Self {
-    let id = uuid::Uuid::new_v4();
+    let id = uuid::Uuid::new_v4().to_string();
     TableJob::Admin(JobWapper { job, id, attempts: 0 })
   }
 
@@ -95,7 +95,7 @@ impl TableJob {
   }
 
   pub fn reindex() -> Self {
-    let id = uuid::Uuid::new_v4();
+    let id = uuid::Uuid::new_v4().to_string();
     TableJob::Admin(JobWapper {
       job: TableAdminJob::ReindexPopulations,
       id,
@@ -103,14 +103,14 @@ impl TableJob {
     })
   }
 
-  pub fn roll(table: uuid::Uuid, version: uuid::Uuid) -> Self {
-    let id = uuid::Uuid::new_v4();
+  pub fn roll(table: String, version: String) -> Self {
+    let id = uuid::Uuid::new_v4().to_string();
     let job = RollJob { table, version };
     TableJob::Roll(JobWapper { job, id, attempts: 0 })
   }
 
-  pub fn bet(state: BetState, player: uuid::Uuid, table: uuid::Uuid, version: uuid::Uuid) -> Self {
-    let id = uuid::Uuid::new_v4();
+  pub fn bet(state: BetState, player: String, table: String, version: String) -> Self {
+    let id = uuid::Uuid::new_v4().to_string();
     let job = BetJob {
       bet: state,
       player,
@@ -151,11 +151,11 @@ pub enum TableJobOutput {
 pub struct JobResult<T> {
   completed: Option<chrono::DateTime<chrono::Utc>>,
   output: Option<T>,
-  id: uuid::Uuid,
+  id: String,
 }
 
 impl<T> JobResult<T> {
-  pub fn empty(id: uuid::Uuid) -> Self {
+  pub fn empty(id: String) -> Self {
     return Self {
       id,
       completed: None,
@@ -163,7 +163,7 @@ impl<T> JobResult<T> {
     };
   }
 
-  pub fn wrap(id: uuid::Uuid, inner: T) -> Self {
+  pub fn wrap(id: String, inner: T) -> Self {
     let completed = Some(chrono::Utc::now());
     Self {
       output: Some(inner),

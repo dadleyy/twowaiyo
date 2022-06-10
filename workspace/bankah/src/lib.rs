@@ -5,6 +5,6 @@ pub mod state;
 
 #[derive(Debug, Serialize)]
 pub struct JobResponse {
-  pub job: uuid::Uuid,
+  pub job: String,
   pub output: Option<jobs::TableJobOutput>,
 }

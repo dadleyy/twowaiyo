@@ -19,6 +19,6 @@ pub async fn connect(url: String) -> Result<Client> {
   Client::with_options(options).map_err(mongo_error)
 }
 
-pub fn lookup_for_uuid(id: &uuid::Uuid) -> bson::Document {
-  doc! { "id": id.to_string() }
+pub fn lookup_for_uuid(id: &String) -> bson::Document {
+  doc! { "id": id }
 }

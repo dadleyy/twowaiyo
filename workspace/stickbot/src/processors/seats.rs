@@ -96,7 +96,7 @@ pub async fn create(services: &crate::Services, pid: &String) -> Result<TableJob
     JobError::Terminal("".into())
   })?;
 
-  let query = crate::db::doc! { "id": player.id.to_string() };
+  let query = crate::db::doc! { "id": pid };
   let updates = crate::db::doc! { "$set": { "balance": player.balance, "tables": player.tables } };
   let opts = crate::db::FindOneAndUpdateOptions::builder()
     .return_document(crate::db::ReturnDocument::After)

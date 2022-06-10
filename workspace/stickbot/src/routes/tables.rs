@@ -67,7 +67,7 @@ pub async fn list(request: Request) -> Result {
 
 #[derive(Debug, Deserialize)]
 struct TableActionPayload {
-  pub id: uuid::Uuid,
+  pub id: String,
 }
 
 // ## Route
@@ -86,15 +86,15 @@ pub async fn find(request: Request) -> Result {
     Error::from_str(404, "not-found")
   })?;
 
-  log::trace!("looking up table {}", query.id);
+  log::info!("[info] looking up table '{}'", query.id);
 
   let table = request
     .state()
     .tables()
-    .find_one(crate::db::lookup_for_uuid(&query.id), None)
+    .find_one(crate::db::doc! { "id": &query.id }, None)
     .await
     .map_err(|error| {
-      log::warn!("unable to perform lookup - {}", error);
+      log::warn!("[info] unable to perform lookup - {}", error);
       Error::from_str(500, "bad service")
     })?
     .ok_or_else(|| {

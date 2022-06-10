@@ -16,7 +16,7 @@ where
   R: Clone + Iterator<Item = u8>,
 {
   pub table: Table<R>,
-  pub results: HashMap<uuid::Uuid, SeatRuns>,
+  pub results: HashMap<String, SeatRuns>,
 }
 
 #[derive(Clone)]
@@ -24,10 +24,10 @@ pub struct Table<R>
 where
   R: Clone + Iterator<Item = u8>,
 {
-  id: uuid::Uuid,
-  roller: Option<uuid::Uuid>,
+  id: String,
+  roller: Option<String>,
   button: Option<u8>,
-  seats: HashMap<uuid::Uuid, Seat>,
+  seats: HashMap<String, Seat>,
   rolls: Vec<Roll>,
   dice: R,
 }
@@ -35,7 +35,7 @@ where
 impl Default for Table<RandomRoller> {
   fn default() -> Self {
     let rolls = Vec::with_capacity(crate::constants::MAX_ROLL_HISTORY);
-    let id = uuid::Uuid::new_v4();
+    let id = uuid::Uuid::new_v4().to_string();
     let seats = HashMap::with_capacity(100);
     Table {
       id,
@@ -59,7 +59,7 @@ where
 
   let updated = seat.bet(bet).map_err(|e| e.map(|_| table.clone()))?;
 
-  table.seats.insert(player.id, updated);
+  table.seats.insert(player.id.clone(), updated);
   Ok(table)
 }
 
@@ -129,7 +129,7 @@ where
           Some((key, value))
         }
       })
-      .collect::<HashMap<uuid::Uuid, Seat>>();
+      .collect::<HashMap<String, Seat>>();
 
     roller = roller.and_then(|id| if id == player.id { None } else { Some(id) });
 
@@ -159,7 +159,7 @@ where
 
     let roller = roller.or(Some(player.id.clone()));
 
-    seats.insert(player.id, Seat::with_balance(player.balance));
+    seats.insert(player.id.clone(), Seat::with_balance(player.balance));
     player.balance = 0;
     Table {
       id,
@@ -187,8 +187,8 @@ where
       (HashMap::with_capacity(pop), HashMap::with_capacity(pop)),
       |(mut seats, mut totals), res| {
         let (uuid, (seat, results)) = res;
-        seats.insert(uuid, seat);
-        totals.insert(uuid, results);
+        seats.insert(uuid.clone(), seat);
+        totals.insert(uuid.clone(), results);
         (seats, totals)
       },
     );

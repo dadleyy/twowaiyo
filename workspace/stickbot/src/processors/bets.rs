@@ -23,7 +23,7 @@ fn apply_bet(ps: PlayerState, mut ts: TableState, bs: BetState) -> Result<TableS
 
   let mut next = TableState::from(&table);
 
-  ts.nonce = uuid::Uuid::new_v4();
+  ts.nonce = uuid::Uuid::new_v4().to_string();
   ts.seats = ts
     .seats
     .into_iter()

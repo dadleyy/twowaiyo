@@ -95,7 +95,7 @@ async fn token_from_response(response: &mut surf::Response) -> Option<String> {
 }
 
 fn player_from_userinfo(userinfo: &UserInfo) -> std::io::Result<db::bson::Document> {
-  let id = uuid::Uuid::new_v4();
+  let id = uuid::Uuid::new_v4().to_string();
   let oid = userinfo.sub.clone();
   let nickname = userinfo.nickname.clone();
   let state = bankah::state::PlayerState {

@@ -8,7 +8,7 @@ use bankah::state::{BetState, RaceType, TargetKind};
 
 #[derive(Debug, Serialize)]
 struct BetResult {
-  job: uuid::Uuid,
+  job: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -16,8 +16,8 @@ struct BetPayload {
   kind: String,
   amount: u32,
   target: Option<u8>,
-  table: uuid::Uuid,
-  nonce: uuid::Uuid,
+  table: String,
+  nonce: String,
 }
 
 impl BetPayload {

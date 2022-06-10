@@ -36,13 +36,7 @@ pub async fn find(request: Request) -> Result {
     kramer::Response::Item(kramer::ResponseValue::String(inner)) => inner.clone(),
     kramer::Response::Item(kramer::ResponseValue::Empty) => {
       log::debug!("nothing in job result store for '{}' yet", query.id);
-      return uuid::Uuid::parse_str(&query.id)
-        .map_err(|error| {
-          log::warn!("unable to parse input as uuid - '{}'", error);
-          Error::from_str(422, "invalid-id")
-        })
-        .map(|uuid| JobResult::empty(uuid) as JobResult<u8>)
-        .and_then(|res| Body::from_json(&res))
+      return Body::from_json(&JobResult::empty(query.id) as &JobResult<u8>)
         .map(|bod| Response::builder(200).body(bod).build());
     }
     other => {

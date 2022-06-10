@@ -10,8 +10,8 @@ pub struct RollResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct RollPayload {
-  table: uuid::Uuid,
-  nonce: uuid::Uuid,
+  table: String,
+  nonce: String,
 }
 
 pub async fn create(mut request: Request) -> Result {
@@ -43,7 +43,7 @@ pub async fn create(mut request: Request) -> Result {
   }
 
   // Update the nonce/version of the table before submitting our job.
-  let nonce = uuid::Uuid::new_v4();
+  let nonce = uuid::Uuid::new_v4().to_string();
   let next = bankah::state::TableState {
     nonce: nonce.clone(),
     ..table

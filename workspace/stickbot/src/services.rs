@@ -97,7 +97,7 @@ impl Services {
     Ok(result.get(1).and_then(parse_pop))
   }
 
-  pub async fn queue(&self, job: &bankah::jobs::TableJob) -> Result<uuid::Uuid> {
+  pub async fn queue(&self, job: &bankah::jobs::TableJob) -> Result<String> {
     let serialized = serde_json::to_string(&job).map_err(|error| {
       log::warn!("unable to serialize job - {}", error);
       Error::new(ErrorKind::Other, format!("{}", error))

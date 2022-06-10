@@ -22,7 +22,7 @@ pub async fn delete(request: Request) -> Result {
   log::debug!("player {} deleting account", player.id);
 
   players
-    .delete_one(db::doc! { "id": player.id.to_string() }, None)
+    .delete_one(db::doc! { "id": &player.id }, None)
     .await
     .map_err(|error| {
       log::warn!("unable to delete player record: {}", error);
@@ -37,8 +37,5 @@ pub async fn delete(request: Request) -> Result {
     error
   })?;
 
-  Body::from_json(&DeletionResponsePayload {
-    id: player.id.to_string(),
-  })
-  .map(|body| Response::builder(200).body(body).build())
+  Body::from_json(&DeletionResponsePayload { id: player.id }).map(|body| Response::builder(200).body(body).build())
 }

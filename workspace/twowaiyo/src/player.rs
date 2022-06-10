@@ -4,7 +4,7 @@ use bankah::state::PlayerState;
 
 #[derive(Debug, Clone, Eq)]
 pub struct Player {
-  pub id: uuid::Uuid,
+  pub id: String,
   pub balance: u32,
 }
 
@@ -48,7 +48,7 @@ impl Player {
 impl Default for Player {
   fn default() -> Self {
     Player {
-      id: uuid::Uuid::new_v4(),
+      id: uuid::Uuid::new_v4().to_string(),
       balance: 10000,
     }
   }

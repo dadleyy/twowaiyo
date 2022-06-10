@@ -46,21 +46,22 @@ impl Default for SeatState {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TableIndexState {
-  pub id: uuid::Uuid,
+  pub id: String,
   pub name: String,
   pub population: Vec<(String, String)>,
 }
 
+#[serde_with::serde_as]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TableState {
-  pub id: uuid::Uuid,
+  pub id: String,
   pub name: String,
   pub button: Option<u8>,
-  pub roller: Option<uuid::Uuid>,
-  pub seats: HashMap<uuid::Uuid, SeatState>,
+  pub roller: Option<String>,
+  pub seats: HashMap<String, SeatState>,
   pub rolls: Vec<(u8, u8)>,
   pub created_at: chrono::DateTime<chrono::Utc>,
-  pub nonce: uuid::Uuid,
+  pub nonce: String,
 }
 
 impl TableState {
@@ -79,22 +80,21 @@ impl TableState {
 impl Default for TableState {
   fn default() -> Self {
     TableState {
-      id: uuid::Uuid::new_v4(),
+      id: uuid::Uuid::new_v4().to_string(),
       name: String::default(),
       created_at: chrono::Utc::now(),
       roller: None,
       button: None,
       rolls: vec![],
       seats: HashMap::new(),
-      nonce: uuid::Uuid::new_v4(),
+      nonce: uuid::Uuid::new_v4().to_string(),
     }
   }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PlayerState {
-  #[serde(with = "bson::serde_helpers::uuid_as_binary")]
-  pub id: uuid::Uuid,
+  pub id: String,
   pub oid: String,
   pub emails: Vec<String>,
   pub nickname: String,
