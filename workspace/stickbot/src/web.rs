@@ -6,9 +6,9 @@ pub use tide::{Body, Error, Redirect, Response, Result};
 pub type Request = tide::Request<crate::Services>;
 
 pub fn cookie(request: &Request) -> Option<Cookie<'static>> {
-  request
-    .header("Cookie")
-    .and_then(|list| list.get(0))
-    .map(|value| value.to_string())
-    .and_then(|cook| Cookie::parse(cook).ok())
+  let session_cookie = request.cookie(crate::constants::STICKBOT_COOKIE_NAME)?;
+
+  log::debug!("found cookie header - {session_cookie:?}");
+
+  Some(session_cookie)
 }
